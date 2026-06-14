@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { api } from '../lib/api';
 import { Layout } from '../app/components/Layout';
@@ -25,6 +25,12 @@ export default function Profile() {
   const [showOld, setShowOld] = useState(false);
   const [showNew, setShowNew] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
+
+  useEffect(() => {
+    setName(user?.name || '');
+    setPhone(user?.phone || '');
+    setAddress(user?.address || '');
+  }, [user?.address, user?.name, user?.phone]);
 
   async function handleSaveProfile(e: React.FormEvent) {
     e.preventDefault();

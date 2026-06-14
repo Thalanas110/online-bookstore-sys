@@ -1,0 +1,27 @@
+{
+  "projectId": "YOUR_APPWRITE_PROJECT_ID",
+  "projectName": "Online Bookstore System",
+  "endpoint": "https://cloud.appwrite.io/v1",
+  "functions": [
+    {
+      "$id": "bookstore-api",
+      "name": "bookstore-api",
+      "execute": [
+        "any"
+      ],
+      "enabled": true,
+      "logging": true,
+      "runtime": "node-22",
+      "buildSpecification": "s-1vcpu-512mb",
+      "runtimeSpecification": "s-1vcpu-512mb",
+      "deploymentRetention": 7,
+      "events": [],
+      "schedule": "",
+      "timeout": 30,
+      "entrypoint": "src/main.js",
+      "commands": "npm install",
+      "ignore": "node_modules\n.env\n.env.local",
+      "path": "appwrite/functions/bookstore-api"
+    }
+  ]
+}

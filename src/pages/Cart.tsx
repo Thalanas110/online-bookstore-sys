@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
-import { api, OrderItem } from '../lib/api';
+import { api } from '../lib/api';
 import { Layout } from '../app/components/Layout';
 import { Button } from '../app/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../app/components/ui/card';
@@ -29,6 +29,12 @@ export default function Cart() {
   const [appliedPromo, setAppliedPromo] = useState<{ code: string; discount: number } | null>(null);
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (user?.address) {
+      setShippingAddress(current => current || user.address || '');
+    }
+  }, [user?.address]);
+
   const shippingCost = subtotal > 50 ? 0 : 5.99;
   const tax = subtotal * 0.08;
   const promoDiscount = appliedPromo ? (subtotal * appliedPromo.discount) / 100 : 0;
@@ -52,16 +58,10 @@ export default function Cart() {
 
     setLoading(true);
     try {
-      const orderItems: OrderItem[] = items.map(item => ({
+      await api.createOrder(items.map(item => ({
         bookId: item.bookId,
-        bookTitle: item.title,
-        bookAuthor: item.author,
-        imageUrl: item.imageUrl,
         quantity: item.quantity,
-        price: item.price,
-      }));
-
-      await api.createOrder(orderItems, shippingAddress);
+      })), shippingAddress);
       clearCart();
       toast.success('Order placed successfully!');
       navigate('/orders');

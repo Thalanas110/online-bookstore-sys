@@ -1,0 +1,10 @@
+{
+  "name": "bookstore-api-function",
+  "private": true,
+  "type": "module",
+  "version": "0.0.1",
+  "dependencies": {
+    "mongodb": "^6.19.0",
+    "node-appwrite": "^17.1.0"
+  }
+}

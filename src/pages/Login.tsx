@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router';
+import { BookOpen, Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import { toast } from 'sonner';
+
 import { useAuth } from '../contexts/AuthContext';
 import { Button } from '../app/components/ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../app/components/ui/card';
 import { Input } from '../app/components/ui/input';
 import { Label } from '../app/components/ui/label';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../app/components/ui/card';
-import { toast } from 'sonner';
-import { BookOpen, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -19,6 +20,7 @@ export default function Login() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+
     try {
       await login(email, password);
       toast.success('Welcome back!');
@@ -33,7 +35,6 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-primary/10 p-4">
       <div className="w-full max-w-md">
-        {/* Logo */}
         <div className="text-center mb-8">
           <div className="inline-flex items-center gap-2 mb-2">
             <div className="p-2 bg-primary rounded-xl">
@@ -92,28 +93,6 @@ export default function Login() {
                     {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                   </Button>
                 </div>
-              </div>
-
-              {/* Demo hint */}
-              <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground space-y-2">
-                <p className="font-medium text-foreground">Demo accounts:</p>
-                <div className="space-y-1">
-                  <button
-                    type="button"
-                    className="w-full text-left hover:bg-muted rounded p-1 transition-colors"
-                    onClick={() => { setEmail('demo@pageturn.com'); setPassword('password123'); }}
-                  >
-                    👤 User: <span className="font-mono">demo@pageturn.com</span> / <span className="font-mono">password123</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="w-full text-left hover:bg-muted rounded p-1 transition-colors"
-                    onClick={() => { setEmail('admin@pageturn.com'); setPassword('admin123'); }}
-                  >
-                    🛡️ Admin: <span className="font-mono">admin@pageturn.com</span> / <span className="font-mono">admin123</span>
-                  </button>
-                </div>
-                <p className="text-muted-foreground/60">Click to auto-fill</p>
               </div>
             </CardContent>
             <CardFooter className="flex flex-col gap-3">

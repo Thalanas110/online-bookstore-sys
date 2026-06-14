@@ -1,37 +1,29 @@
 import { useState } from 'react';
+import { Check, ChevronDown, ChevronRight, Copy } from 'lucide-react';
+
 import { Badge } from './ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
-import { ChevronDown, ChevronRight, Copy, Check } from 'lucide-react';
-import { Button } from './ui/button';
-import { toast } from 'sonner';
 
-type HttpMethod = 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
-interface Param {
-  name: string;
-  type: string;
-  required?: boolean;
+interface EndpointGroup {
+  title: string;
   description: string;
+  endpoints: Array<{
+    method: HttpMethod;
+    path: string;
+    auth: 'none' | 'user' | 'admin';
+    summary: string;
+    request?: string;
+    response: string;
+  }>;
 }
 
-interface Endpoint {
-  method: HttpMethod;
-  path: string;
-  summary: string;
-  description: string;
-  auth: 'none' | 'user' | 'admin';
-  params?: Param[];
-  body?: Param[];
-  response: string;
-}
+const BASE_URL = String(
+  import.meta.env.VITE_API_BASE_URL ?? 'https://<bookstore-api-function-domain>/api',
+).replace(/\/+$/g, '');
 
-interface Group {
-  tag: string;
-  description: string;
-  endpoints: Endpoint[];
-}
-
-const METHOD_COLOR: Record<HttpMethod, string> = {
+const METHOD_STYLES: Record<HttpMethod, string> = {
   GET: 'bg-blue-100 text-blue-700',
   POST: 'bg-emerald-100 text-emerald-700',
   PUT: 'bg-amber-100 text-amber-700',
@@ -39,236 +31,377 @@ const METHOD_COLOR: Record<HttpMethod, string> = {
   DELETE: 'bg-red-100 text-red-700',
 };
 
-const AUTH_LABEL: Record<string, { label: string; color: string }> = {
-  none: { label: 'Public', color: 'bg-gray-100 text-gray-600' },
-  user: { label: 'Auth required', color: 'bg-blue-100 text-blue-700' },
-  admin: { label: 'Admin only', color: 'bg-purple-100 text-purple-700' },
+const AUTH_STYLES = {
+  none: 'bg-slate-100 text-slate-700',
+  user: 'bg-blue-100 text-blue-700',
+  admin: 'bg-rose-100 text-rose-700',
 };
 
-const BASE_URL = 'https://api.pageturn.com/v1';
-
-const API_GROUPS: Group[] = [
+const GROUPS: EndpointGroup[] = [
   {
-    tag: 'Authentication',
-    description: 'Register, log in, log out, and inspect the current session.',
+    title: 'Auth',
+    description: 'Server endpoints exist for non-browser clients. The browser UI signs in directly with Appwrite and then calls the Function with Appwrite JWT bearer tokens.',
     endpoints: [
       {
-        method: 'POST', path: '/auth/register', auth: 'none',
-        summary: 'Register a new user',
-        description: 'Creates a new user account and starts a session automatically.',
-        body: [
-          { name: 'name', type: 'string', required: true, description: 'Full display name' },
-          { name: 'email', type: 'string', required: true, description: 'Unique email address' },
-          { name: 'password', type: 'string', required: true, description: 'Min 8 characters' },
-        ],
-        response: `{ "$id": "user_abc123", "name": "Jane Doe", "email": "jane@example.com", "role": "user" }`,
+        method: 'POST',
+        path: '/auth/register',
+        auth: 'none',
+        summary: 'Create an Appwrite user account.',
+        request: `{
+  "email": "reader@example.com",
+  "password": "password123",
+  "name": "Reader One"
+}`,
+        response: `{
+  "$id": "user_abc123",
+  "name": "Reader One",
+  "email": "reader@example.com",
+  "role": "user"
+}`,
       },
       {
-        method: 'POST', path: '/auth/login', auth: 'none',
-        summary: 'Log in',
-        description: 'Authenticates the user and returns a session token.',
-        body: [
-          { name: 'email', type: 'string', required: true, description: 'Registered email' },
-          { name: 'password', type: 'string', required: true, description: 'Account password' },
-        ],
-        response: `{ "$id": "user_abc123", "name": "Jane Doe", "email": "jane@example.com", "role": "user", "token": "eyJhbGci..." }`,
+        method: 'POST',
+        path: '/auth/login',
+        auth: 'none',
+        summary: 'Create an Appwrite email/password session.',
+        request: `{
+  "email": "reader@example.com",
+  "password": "password123"
+}`,
+        response: `{
+  "user": {
+    "$id": "user_abc123",
+    "name": "Reader One",
+    "email": "reader@example.com",
+    "role": "user"
+  },
+  "session": {
+    "secret": "session_secret_value",
+    "expire": "2026-06-15T00:00:00.000Z"
+  }
+}`,
       },
       {
-        method: 'POST', path: '/auth/logout', auth: 'user',
-        summary: 'Log out',
-        description: 'Invalidates the current session token.',
-        response: `{ "success": true }`,
+        method: 'POST',
+        path: '/auth/logout',
+        auth: 'user',
+        summary: 'Delete the current Appwrite session represented by the JWT.',
+        response: `204 No Content`,
       },
       {
-        method: 'GET', path: '/auth/me', auth: 'user',
-        summary: 'Get current user',
-        description: 'Returns the profile of the currently authenticated user.',
-        response: `{ "$id": "user_abc123", "name": "Jane Doe", "email": "jane@example.com", "role": "user", "phone": "555-0100", "address": "123 Main St" }`,
+        method: 'GET',
+        path: '/auth/me',
+        auth: 'user',
+        summary: 'Return the authenticated user with MongoDB-backed profile fields.',
+        response: `{
+  "$id": "user_abc123",
+  "name": "Reader One",
+  "email": "reader@example.com",
+  "role": "user",
+  "phone": "+15555550123",
+  "address": "123 Main St"
+}`,
       },
     ],
   },
   {
-    tag: 'Users',
-    description: 'Manage user profiles and preferences.',
+    title: 'Users',
+    description: 'Profile data is stored in MongoDB. Address fields are encrypted at rest with AES-256-GCM.',
     endpoints: [
       {
-        method: 'GET', path: '/users/me', auth: 'user',
-        summary: 'Get own profile',
-        description: 'Returns the full profile of the currently authenticated user including preferences.',
-        response: `{ "$id": "user_abc123", "name": "Jane Doe", "email": "jane@example.com", "role": "user", "phone": "555-0100", "address": "AES-256-GCM encrypted" }`,
+        method: 'GET',
+        path: '/users/profile',
+        auth: 'user',
+        summary: 'Return the authenticated user profile.',
+        response: `{
+  "$id": "user_abc123",
+  "name": "Reader One",
+  "email": "reader@example.com",
+  "role": "user",
+  "phone": "+15555550123",
+  "address": "123 Main St"
+}`,
       },
       {
-        method: 'PUT', path: '/users/me', auth: 'user',
-        summary: 'Update own profile',
-        description: 'Updates name, phone, or shipping address. Shipping address is stored AES-256-GCM encrypted.',
-        body: [
-          { name: 'name', type: 'string', description: 'New display name' },
-          { name: 'phone', type: 'string', description: 'Phone number' },
-          { name: 'address', type: 'string', description: 'Shipping address (encrypted at rest)' },
-        ],
-        response: `{ "$id": "user_abc123", "name": "Jane Doe Updated", ... }`,
+        method: 'PUT',
+        path: '/users/profile',
+        auth: 'user',
+        summary: 'Update Appwrite name plus MongoDB phone and address.',
+        request: `{
+  "name": "Reader Updated",
+  "phone": "+15555550123",
+  "address": "123 Main St"
+}`,
+        response: `{
+  "$id": "user_abc123",
+  "name": "Reader Updated",
+  "email": "reader@example.com",
+  "role": "user",
+  "phone": "+15555550123",
+  "address": "123 Main St"
+}`,
       },
       {
-        method: 'PUT', path: '/users/me/password', auth: 'user',
-        summary: 'Change password',
-        description: 'Updates the user password. Requires the current password for verification.',
-        body: [
-          { name: 'currentPassword', type: 'string', required: true, description: 'Existing password' },
-          { name: 'newPassword', type: 'string', required: true, description: 'New password (min 8 chars)' },
-        ],
-        response: `{ "success": true }`,
-      },
-      {
-        method: 'GET', path: '/admin/users', auth: 'admin',
-        summary: 'List all users',
-        description: 'Returns a paginated list of all registered users. Admin only.',
-        params: [
-          { name: 'page', type: 'number', description: 'Page number (default: 1)' },
-          { name: 'limit', type: 'number', description: 'Items per page (default: 20, max: 100)' },
-          { name: 'role', type: 'string', description: 'Filter by role: user | admin' },
-        ],
-        response: `{ "data": [...], "total": 128, "page": 1, "limit": 20 }`,
+        method: 'PUT',
+        path: '/users/change-password',
+        auth: 'user',
+        summary: 'Change the authenticated Appwrite password.',
+        request: `{
+  "oldPassword": "password123",
+  "newPassword": "new-password-456"
+}`,
+        response: `204 No Content`,
       },
     ],
   },
   {
-    tag: 'Books',
-    description: 'Browse, search, and manage the book catalog.',
+    title: 'Books',
+    description: 'Book catalog data is stored in MongoDB. Reads require a valid Appwrite JWT. Writes are admin-only.',
     endpoints: [
       {
-        method: 'GET', path: '/books', auth: 'none',
-        summary: 'List books',
-        description: 'Returns a paginated list of books with optional filtering and sorting.',
-        params: [
-          { name: 'search', type: 'string', description: 'Full-text search on title and author' },
-          { name: 'category', type: 'string', description: 'Filter by category slug' },
-          { name: 'sort', type: 'string', description: 'One of: featured | price_asc | price_desc | rating | newest' },
-          { name: 'page', type: 'number', description: 'Page number (default: 1)' },
-          { name: 'limit', type: 'number', description: 'Items per page (default: 20)' },
-        ],
-        response: `{ "data": [{ "$id": "1", "title": "...", "author": "...", "price": 15.99, "rating": 4.2, ... }], "total": 64 }`,
+        method: 'GET',
+        path: '/books',
+        auth: 'user',
+        summary: 'List books. Supports ?search= and ?category=.',
+        response: `[
+  {
+    "$id": "book_abc123",
+    "title": "The Great Gatsby",
+    "author": "F. Scott Fitzgerald",
+    "isbn": "978-0743273565",
+    "price": 15.99,
+    "stock": 50,
+    "category": "Fiction",
+    "rating": 4.2,
+    "reviewCount": 4821,
+    "discount": 10
+  }
+]`,
       },
       {
-        method: 'GET', path: '/books/:id', auth: 'none',
-        summary: 'Get a book',
-        description: 'Returns the full details of a single book by its ID.',
-        response: `{ "$id": "1", "title": "The Great Gatsby", "author": "F. Scott Fitzgerald", "isbn": "978-...", "price": 15.99, "stock": 50, "rating": 4.2, "reviewCount": 4821, ... }`,
+        method: 'GET',
+        path: '/books/{bookId}',
+        auth: 'user',
+        summary: 'Get a single book.',
+        response: `{
+  "$id": "book_abc123",
+  "title": "The Great Gatsby",
+  "author": "F. Scott Fitzgerald",
+  "isbn": "978-0743273565",
+  "price": 15.99,
+  "stock": 50
+}`,
       },
       {
-        method: 'POST', path: '/books', auth: 'admin',
-        summary: 'Create a book',
-        description: 'Adds a new book to the catalog. Admin only.',
-        body: [
-          { name: 'title', type: 'string', required: true, description: 'Book title' },
-          { name: 'author', type: 'string', required: true, description: 'Author name' },
-          { name: 'isbn', type: 'string', required: true, description: 'ISBN-13 format' },
-          { name: 'price', type: 'number', required: true, description: 'Price in USD' },
-          { name: 'stock', type: 'number', required: true, description: 'Initial stock count' },
-          { name: 'category', type: 'string', required: true, description: 'Category name' },
-          { name: 'description', type: 'string', required: true, description: 'Book synopsis' },
-          { name: 'publishedYear', type: 'number', required: true, description: 'Year of publication' },
-          { name: 'imageUrl', type: 'string', description: 'Cover image URL' },
-          { name: 'discount', type: 'number', description: 'Discount percentage (0–100)' },
-          { name: 'isFeatured', type: 'boolean', description: 'Show in featured section' },
-          { name: 'isBestseller', type: 'boolean', description: 'Show bestseller badge' },
-        ],
-        response: `{ "$id": "new_book_id", "title": "...", ... }`,
+        method: 'POST',
+        path: '/books',
+        auth: 'admin',
+        summary: 'Create a book.',
+        request: `{
+  "title": "Dune",
+  "author": "Frank Herbert",
+  "isbn": "9780441013593",
+  "price": 19.99,
+  "stock": 12,
+  "description": "Science fiction classic",
+  "category": "Science Fiction",
+  "publishedYear": 1965
+}`,
+        response: `{
+  "$id": "book_new123",
+  "title": "Dune",
+  "author": "Frank Herbert"
+}`,
       },
       {
-        method: 'PUT', path: '/books/:id', auth: 'admin',
-        summary: 'Update a book',
-        description: 'Updates one or more fields of an existing book. Admin only. All body fields are optional.',
-        body: [
-          { name: 'title', type: 'string', description: 'New title' },
-          { name: 'price', type: 'number', description: 'New price' },
-          { name: 'stock', type: 'number', description: 'Updated stock count' },
-          { name: 'discount', type: 'number', description: 'New discount percentage' },
-        ],
-        response: `{ "$id": "1", "title": "...", "price": 12.99, ... }`,
+        method: 'PUT',
+        path: '/books/{bookId}',
+        auth: 'admin',
+        summary: 'Update a book.',
+        request: `{
+  "stock": 10,
+  "price": 17.99
+}`,
+        response: `{
+  "$id": "book_abc123",
+  "stock": 10,
+  "price": 17.99
+}`,
       },
       {
-        method: 'DELETE', path: '/books/:id', auth: 'admin',
-        summary: 'Delete a book',
-        description: 'Permanently removes a book from the catalog. Admin only.',
-        response: `{ "success": true }`,
+        method: 'DELETE',
+        path: '/books/{bookId}',
+        auth: 'admin',
+        summary: 'Delete a book.',
+        response: `204 No Content`,
       },
     ],
   },
   {
-    tag: 'Orders',
-    description: 'Place and track customer orders.',
+    title: 'Orders',
+    description: 'Order totals are recomputed from stored book data. Client-supplied pricing is ignored.',
     endpoints: [
       {
-        method: 'POST', path: '/orders', auth: 'user',
-        summary: 'Create an order',
-        description: 'Places a new order. The shipping address is AES-256-GCM encrypted before storage.',
-        body: [
-          { name: 'items', type: 'OrderItem[]', required: true, description: 'Array of { bookId, quantity }' },
-          { name: 'shippingAddress', type: 'string', required: true, description: 'Delivery address (encrypted at rest)' },
-          { name: 'promoCode', type: 'string', description: 'Optional promo code for a discount' },
-        ],
-        response: `{ "$id": "order_xyz", "status": "pending", "totalAmount": 32.98, "trackingNumber": "TRKABC123", "estimatedDelivery": "2026-06-08T..." }`,
+        method: 'POST',
+        path: '/orders',
+        auth: 'user',
+        summary: 'Create an order. Shipping address is encrypted server-side with AES-256-GCM.',
+        request: `{
+  "items": [
+    { "bookId": "book_abc123", "quantity": 2 }
+  ],
+  "shippingAddress": "456 Oak Ave"
+}`,
+        response: `{
+  "$id": "order_abc123",
+  "userId": "user_abc123",
+  "items": [
+    {
+      "bookId": "book_abc123",
+      "bookTitle": "The Great Gatsby",
+      "quantity": 2,
+      "price": 14.39
+    }
+  ],
+  "totalAmount": 28.78,
+  "status": "pending",
+  "shippingAddress": "456 Oak Ave",
+  "trackingNumber": "TRKABC123456"
+}`,
       },
       {
-        method: 'GET', path: '/orders', auth: 'user',
-        summary: "List own orders",
-        description: "Returns all orders belonging to the authenticated user, newest first.",
-        params: [
-          { name: 'status', type: 'string', description: 'Filter: pending | processing | shipped | completed | cancelled' },
-          { name: 'page', type: 'number', description: 'Page number' },
-        ],
-        response: `{ "data": [...], "total": 12 }`,
+        method: 'GET',
+        path: '/orders/{orderId}',
+        auth: 'user',
+        summary: 'Get a single order. Users can only read their own order unless they are admin.',
+        response: `{
+  "$id": "order_abc123",
+  "status": "pending",
+  "shippingAddress": "456 Oak Ave"
+}`,
       },
       {
-        method: 'GET', path: '/orders/:id', auth: 'user',
-        summary: 'Get an order',
-        description: 'Returns a single order. Users can only access their own orders; admins can access any.',
-        response: `{ "$id": "order_xyz", "status": "shipped", "items": [...], "shippingAddress": "...", "trackingNumber": "TRKABC123" }`,
-      },
-      {
-        method: 'GET', path: '/admin/orders', auth: 'admin',
-        summary: 'List all orders',
-        description: 'Returns every order across all users. Admin only.',
-        params: [
-          { name: 'status', type: 'string', description: 'Filter by status' },
-          { name: 'userId', type: 'string', description: 'Filter by user ID' },
-          { name: 'page', type: 'number', description: 'Page number' },
-        ],
-        response: `{ "data": [...], "total": 356 }`,
-      },
-      {
-        method: 'PATCH', path: '/admin/orders/:id/status', auth: 'admin',
-        summary: 'Update order status',
-        description: 'Changes the status of an order. Valid transitions: pending→processing→shipped→completed, any→cancelled.',
-        body: [
-          { name: 'status', type: 'string', required: true, description: 'pending | processing | shipped | completed | cancelled' },
-        ],
-        response: `{ "$id": "order_xyz", "status": "shipped", ... }`,
+        method: 'GET',
+        path: '/orders/user/{userId}',
+        auth: 'user',
+        summary: 'List orders for one user.',
+        response: `[
+  {
+    "$id": "order_abc123",
+    "status": "completed",
+    "totalAmount": 28.78
+  }
+]`,
       },
     ],
   },
   {
-    tag: 'Reports',
-    description: 'Sales analytics and inventory reporting. Admin only.',
+    title: 'Admin',
+    description: 'Admin routes require `prefs.role = "admin"` on the Appwrite user.',
     endpoints: [
       {
-        method: 'GET', path: '/admin/reports/sales', auth: 'admin',
-        summary: 'Sales report',
-        description: 'Returns aggregate sales stats, monthly breakdown, and top-selling books.',
-        params: [
-          { name: 'from', type: 'string', description: 'ISO 8601 start date (default: start of current year)' },
-          { name: 'to', type: 'string', description: 'ISO 8601 end date (default: today)' },
-        ],
-        response: `{ "totalSales": 28458.50, "totalOrders": 356, "averageOrderValue": 79.94, "topSellingBooks": [...], "salesByMonth": [...] }`,
+        method: 'GET',
+        path: '/admin/users',
+        auth: 'admin',
+        summary: 'List users merged with MongoDB profile data.',
+        response: `[
+  {
+    "$id": "user_abc123",
+    "name": "Reader One",
+    "email": "reader@example.com",
+    "role": "user",
+    "phone": "+15555550123"
+  }
+]`,
       },
       {
-        method: 'GET', path: '/admin/reports/inventory', auth: 'admin',
-        summary: 'Inventory report',
-        description: 'Returns stock levels across all books, flagging low-stock items.',
-        params: [
-          { name: 'lowStockThreshold', type: 'number', description: 'Units threshold to flag as low stock (default: 10)' },
-        ],
-        response: `{ "totalBooks": 64, "lowStock": [{ "$id": "5", "title": "...", "stock": 3 }], "outOfStock": [...] }`,
+        method: 'GET',
+        path: '/admin/books',
+        auth: 'admin',
+        summary: 'List books plus computed totalSold and revenue.',
+        response: `[
+  {
+    "$id": "book_abc123",
+    "title": "The Great Gatsby",
+    "totalSold": 42,
+    "revenue": 604.38
+  }
+]`,
+      },
+      {
+        method: 'GET',
+        path: '/admin/orders',
+        auth: 'admin',
+        summary: 'List all orders.',
+        response: `[
+  {
+    "$id": "order_abc123",
+    "userId": "user_abc123",
+    "status": "processing",
+    "shippingAddress": "456 Oak Ave"
+  }
+]`,
+      },
+      {
+        method: 'PATCH',
+        path: '/admin/orders/{orderId}/status',
+        auth: 'admin',
+        summary: 'Update order status.',
+        request: `{
+  "status": "processing"
+}`,
+        response: `{
+  "$id": "order_abc123",
+  "status": "processing"
+}`,
+      },
+    ],
+  },
+  {
+    title: 'Reports',
+    description: 'Aggregate reporting endpoints built from MongoDB order and book data.',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/reports/sales',
+        auth: 'admin',
+        summary: 'Get sales totals, monthly buckets, and top-selling books.',
+        response: `{
+  "totalSales": 28458.5,
+  "totalOrders": 356,
+  "averageOrderValue": 79.94,
+  "topSellingBooks": [],
+  "salesByMonth": []
+}`,
+      },
+      {
+        method: 'GET',
+        path: '/reports/orders',
+        auth: 'admin',
+        summary: 'Get order counts by status and recent orders.',
+        response: `{
+  "totalOrders": 356,
+  "ordersByStatus": {
+    "pending": 12,
+    "processing": 8,
+    "shipped": 21,
+    "completed": 309,
+    "cancelled": 6
+  },
+  "averageProcessingTime": null,
+  "recentOrders": []
+}`,
+      },
+      {
+        method: 'GET',
+        path: '/reports/inventory',
+        auth: 'admin',
+        summary: 'Get total books, low-stock, and out-of-stock sets. Supports ?lowStockThreshold=.',
+        response: `{
+  "totalBooks": 64,
+  "lowStock": [],
+  "outOfStock": []
+}`,
       },
     ],
   },
@@ -276,88 +409,77 @@ const API_GROUPS: Group[] = [
 
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
-  function copy() {
-    navigator.clipboard.writeText(text);
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   }
+
   return (
-    <button onClick={copy} className="p-1 rounded hover:bg-white/10 transition-colors">
+    <button onClick={handleCopy} className="p-1 rounded hover:bg-white/10 transition-colors">
       {copied ? <Check className="size-3.5 text-emerald-400" /> : <Copy className="size-3.5 text-muted-foreground" />}
     </button>
   );
 }
 
-function EndpointRow({ ep }: { ep: Endpoint }) {
+function EndpointCard({
+  method,
+  path,
+  auth,
+  summary,
+  request,
+  response,
+}: EndpointGroup['endpoints'][number]) {
   const [open, setOpen] = useState(false);
-  const auth = AUTH_LABEL[ep.auth];
-  const fullPath = `${BASE_URL}${ep.path}`;
+  const fullUrl = `${BASE_URL}${path}`;
 
   return (
     <div className="border rounded-lg overflow-hidden">
       <button
+        type="button"
         className="w-full flex items-center gap-3 p-3 hover:bg-muted/40 transition-colors text-left"
-        onClick={() => setOpen(v => !v)}
+        onClick={() => setOpen(current => !current)}
       >
-        <span className={`shrink-0 text-xs px-2 py-0.5 rounded font-mono ${METHOD_COLOR[ep.method]}`}>
-          {ep.method}
+        <span className={`shrink-0 text-xs px-2 py-0.5 rounded font-mono ${METHOD_STYLES[method]}`}>
+          {method}
         </span>
-        <code className="text-sm flex-1 truncate">{ep.path}</code>
-        <span className="hidden sm:block text-xs text-muted-foreground flex-1 truncate">{ep.summary}</span>
-        <span className={`shrink-0 text-xs px-2 py-0.5 rounded ${auth.color}`}>{auth.label}</span>
-        {open ? <ChevronDown className="size-4 shrink-0 text-muted-foreground" /> : <ChevronRight className="size-4 shrink-0 text-muted-foreground" />}
+        <code className="text-sm flex-1 truncate">{path}</code>
+        <span className={`shrink-0 text-xs px-2 py-0.5 rounded ${AUTH_STYLES[auth]}`}>
+          {auth === 'none' ? 'public' : auth}
+        </span>
+        {open ? <ChevronDown className="size-4 text-muted-foreground" /> : <ChevronRight className="size-4 text-muted-foreground" />}
       </button>
 
       {open && (
         <div className="border-t p-4 space-y-4 bg-muted/20 text-sm">
-          {/* Full URL */}
+          <p className="text-muted-foreground">{summary}</p>
+
           <div className="flex items-center gap-2 bg-muted rounded-md px-3 py-2 font-mono text-xs">
-            <span className={`shrink-0 px-1.5 py-0.5 rounded text-xs ${METHOD_COLOR[ep.method]}`}>{ep.method}</span>
-            <span className="flex-1 truncate">{fullPath}</span>
-            <CopyButton text={`${ep.method} ${fullPath}`} />
+            <span className={`shrink-0 px-1.5 py-0.5 rounded ${METHOD_STYLES[method]}`}>{method}</span>
+            <span className="flex-1 truncate">{fullUrl}</span>
+            <CopyButton text={`${method} ${fullUrl}`} />
           </div>
 
-          <p className="text-muted-foreground">{ep.description}</p>
-
-          {ep.params && ep.params.length > 0 && (
+          {request && (
             <div>
-              <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">Query Parameters</p>
-              <div className="space-y-1">
-                {ep.params.map(p => (
-                  <div key={p.name} className="flex items-start gap-2">
-                    <code className="text-xs bg-muted px-1.5 py-0.5 rounded shrink-0">{p.name}</code>
-                    <span className="text-xs text-blue-600 shrink-0">{p.type}</span>
-                    {p.required && <span className="text-xs text-red-500 shrink-0">required</span>}
-                    <span className="text-xs text-muted-foreground">{p.description}</span>
-                  </div>
-                ))}
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs uppercase tracking-wider text-muted-foreground">Request</p>
+                <CopyButton text={request} />
               </div>
-            </div>
-          )}
-
-          {ep.body && ep.body.length > 0 && (
-            <div>
-              <p className="mb-2 text-xs uppercase tracking-wider text-muted-foreground">Request Body (JSON)</p>
-              <div className="space-y-1">
-                {ep.body.map(p => (
-                  <div key={p.name} className="flex items-start gap-2">
-                    <code className="text-xs bg-muted px-1.5 py-0.5 rounded shrink-0">{p.name}</code>
-                    <span className="text-xs text-blue-600 shrink-0">{p.type}</span>
-                    {p.required && <span className="text-xs text-red-500 shrink-0">required</span>}
-                    <span className="text-xs text-muted-foreground">{p.description}</span>
-                  </div>
-                ))}
-              </div>
+              <pre className="bg-[#1e1e2e] text-[#cdd6f4] text-xs rounded-md p-3 overflow-x-auto">
+                {request}
+              </pre>
             </div>
           )}
 
           <div>
             <div className="flex items-center justify-between mb-1">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">Response (200 OK)</p>
-              <CopyButton text={ep.response} />
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">Response</p>
+              <CopyButton text={response} />
             </div>
             <pre className="bg-[#1e1e2e] text-[#cdd6f4] text-xs rounded-md p-3 overflow-x-auto">
-              {ep.response}
+              {response}
             </pre>
           </div>
         </div>
@@ -367,71 +489,68 @@ function EndpointRow({ ep }: { ep: Endpoint }) {
 }
 
 export function ApiDocs() {
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ Authentication: true });
-
-  function toggleGroup(tag: string) {
-    setOpenGroups(prev => ({ ...prev, [tag]: !prev[tag] }));
-  }
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+    Auth: true,
+    Books: true,
+  });
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="rounded-xl border p-5 bg-gradient-to-r from-primary/5 to-background">
         <div className="flex items-center gap-3 mb-3">
-          <h2 className="text-xl">PageTurn REST API</h2>
+          <h2 className="text-xl">Bookstore Function API</h2>
           <Badge variant="secondary">v1</Badge>
-          <Badge className="bg-emerald-100 text-emerald-700 border-0">Live</Badge>
+          <Badge className="bg-emerald-100 text-emerald-700 border-0">MongoDB + Appwrite</Badge>
         </div>
-        <div className="flex items-center gap-2 bg-muted rounded-md px-3 py-2 font-mono text-sm max-w-sm">
-          <span className="text-muted-foreground flex-1">{BASE_URL}</span>
+        <div className="flex items-center gap-2 bg-muted rounded-md px-3 py-2 font-mono text-sm">
+          <span className="text-muted-foreground flex-1 truncate">{BASE_URL}</span>
           <CopyButton text={BASE_URL} />
         </div>
         <div className="mt-3 flex flex-wrap gap-3 text-xs text-muted-foreground">
-          <span>🔒 HTTPS only</span>
-          <span>📦 JSON request &amp; response</span>
-          <span>🔑 Bearer token auth</span>
-          <span>🔐 AES-256-GCM encrypted fields</span>
+          <span>HTTPS only</span>
+          <span>Authorization: Bearer &lt;Appwrite JWT&gt;</span>
+          <span>AES-256-GCM at rest for addresses</span>
         </div>
       </div>
 
-      {/* Auth note */}
       <Card>
         <CardContent className="p-4 text-sm space-y-2">
-          <p className="font-medium">Authentication</p>
+          <p className="font-medium">Frontend to backend auth</p>
           <p className="text-muted-foreground">
-            Include the session token from <code className="bg-muted px-1 rounded">/auth/login</code> in the{' '}
-            <code className="bg-muted px-1 rounded">Authorization</code> header:
+            The browser signs in directly with Appwrite, then creates a short-lived JWT per request. Protected Function routes expect:
           </p>
           <div className="flex items-center gap-2 bg-[#1e1e2e] text-[#cdd6f4] rounded-md px-3 py-2 font-mono text-xs">
-            <span className="flex-1">Authorization: Bearer eyJhbGci...</span>
-            <CopyButton text="Authorization: Bearer eyJhbGci..." />
+            <span className="flex-1">Authorization: Bearer &lt;appwrite-user-jwt&gt;</span>
+            <CopyButton text="Authorization: Bearer <appwrite-user-jwt>" />
           </div>
         </CardContent>
       </Card>
 
-      {/* Endpoint groups */}
-      {API_GROUPS.map(group => (
-        <Card key={group.tag}>
+      {GROUPS.map(group => (
+        <Card key={group.title}>
           <CardHeader
             className="cursor-pointer hover:bg-muted/30 transition-colors rounded-t-lg py-3"
-            onClick={() => toggleGroup(group.tag)}
+            onClick={() => setOpenGroups(current => ({
+              ...current,
+              [group.title]: !current[group.title],
+            }))}
           >
             <CardTitle className="flex items-center justify-between text-base">
               <div className="flex items-center gap-3">
-                <span>{group.tag}</span>
+                <span>{group.title}</span>
                 <Badge variant="outline" className="text-xs">{group.endpoints.length}</Badge>
               </div>
-              {openGroups[group.tag]
+              {openGroups[group.title]
                 ? <ChevronDown className="size-4 text-muted-foreground" />
                 : <ChevronRight className="size-4 text-muted-foreground" />}
             </CardTitle>
             <p className="text-sm text-muted-foreground">{group.description}</p>
           </CardHeader>
 
-          {openGroups[group.tag] && (
+          {openGroups[group.title] && (
             <CardContent className="space-y-2 pt-0">
-              {group.endpoints.map(ep => (
-                <EndpointRow key={`${ep.method}-${ep.path}`} ep={ep} />
+              {group.endpoints.map(endpoint => (
+                <EndpointCard key={`${endpoint.method}-${endpoint.path}`} {...endpoint} />
               ))}
             </CardContent>
           )}

@@ -1,429 +1,302 @@
-# Appwrite Backend Setup Guide
+# Appwrite Setup Guide
 
-This guide will help you set up the Appwrite backend for the Online Bookstore Management System.
+Setup for the production architecture in this repository:
 
-## Quick Start
+- Appwrite Authentication for user identity and browser sessions
+- Appwrite Function `bookstore-api` for all `/api/...` server endpoints
+- MongoDB for books, orders, and profile storage
+- AES-256-GCM encryption in the Function for sensitive fields
 
-### 1. Create Appwrite Project
+## Architecture
 
-1. Go to [Appwrite Cloud](https://cloud.appwrite.io) or use your self-hosted instance
-2. Create a new project
-3. Note your Project ID and Endpoint
+1. The browser signs in directly with Appwrite using the Web SDK.
+2. The browser creates a short-lived Appwrite JWT for each backend request.
+3. The browser calls the Appwrite Function domain over HTTPS.
+4. The Function validates the JWT with Appwrite, applies user/admin authorization, and reads or writes MongoDB.
+5. Shipping and profile addresses are encrypted server-side with AES-256-GCM before being stored.
 
-### 2. Configure Environment Variables
+## Prerequisites
 
-Create a `.env` file in the project root:
+- An Appwrite Cloud or self-hosted Appwrite project
+- A MongoDB deployment
+- Node.js 22+ for local work
+- Appwrite CLI installed and logged in
 
-```env
-VITE_APPWRITE_ENDPOINT=https://cloud.appwrite.io/v1
-VITE_APPWRITE_PROJECT_ID=your_project_id_here
+CLI reference: `appwrite push functions` is the primary deploy command according to the current Appwrite CLI docs.
+
+## 1. Create the Appwrite Project
+
+1. Create a new Appwrite project.
+2. Add a Web platform for every frontend origin you will use.
+3. Enable Email/Password authentication.
+
+For local development, include:
+
+```text
+http://localhost:5173
 ```
 
-### 3. Set Up Authentication
+For production, include your real frontend origin, for example:
 
-In your Appwrite console:
-
-1. Go to **Auth** section
-2. Enable **Email/Password** authentication method
-3. (Optional) Configure email templates for verification
-
-### 4. Create Database (Optional but Recommended)
-
-To replace mock data with real database:
-
-#### Step 1: Create Database
-
-1. Go to **Databases** in Appwrite Console
-2. Click **Create Database**
-3. Name it `bookstore`
-4. Copy the Database ID
-
-#### Step 2: Create Collections
-
-Create the following collections:
-
-##### Books Collection
-
-**Collection ID:** `books`
-
-**Attributes:**
-- `title` - String (required, 256 chars)
-- `author` - String (required, 256 chars)
-- `isbn` - String (required, 20 chars)
-- `price` - Float (required)
-- `stock` - Integer (required)
-- `description` - String (required, 2000 chars)
-- `category` - String (required, 100 chars)
-- `publishedYear` - Integer (required)
-- `imageUrl` - String (optional, 512 chars)
-
-**Indexes:**
-- `title` - Fulltext index for search
-- `category` - Index for filtering
-- `author` - Index for filtering
-
-**Permissions:**
-- Read access: Role: any
-- Create/Update/Delete access: Role: admin
-
-##### Orders Collection
-
-**Collection ID:** `orders`
-
-**Attributes:**
-- `userId` - String (required, relationship to users)
-- `items` - String (required, JSON encoded, 5000 chars)
-- `totalAmount` - Float (required)
-- `status` - String (required, 20 chars) - enum: pending, processing, completed, cancelled
-- `shippingAddress` - String (required, encrypted, 1000 chars)
-- `createdAt` - DateTime (required)
-
-**Indexes:**
-- `userId` - Index for user's orders
-- `status` - Index for filtering
-- `createdAt` - Index for sorting
-
-**Permissions:**
-- Read access: Role: user (own documents only)
-- Create access: Role: user
-- Update/Delete access: Role: admin
-
-#### Step 3: Update Environment Variables
-
-Add to your `.env` file:
-
-```env
-VITE_APPWRITE_DATABASE_ID=bookstore
-VITE_APPWRITE_BOOKS_COLLECTION_ID=books
-VITE_APPWRITE_ORDERS_COLLECTION_ID=orders
+```text
+https://bookstore.example.com
 ```
 
-### 5. Update API Implementation
+## 2. Create the Function API Key
 
-Replace mock data in `/src/lib/api.ts` with real Appwrite queries:
+Create an Appwrite API key for the Function with these scopes:
 
-```typescript
-import { databases } from './appwrite';
-import { Query } from 'appwrite';
+- `users.read`
+- `users.write`
 
-const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID;
-const BOOKS_COLLECTION = import.meta.env.VITE_APPWRITE_BOOKS_COLLECTION_ID;
-const ORDERS_COLLECTION = import.meta.env.VITE_APPWRITE_ORDERS_COLLECTION_ID;
+This key is only used inside the Function. Do not expose it to the frontend.
 
-// Example: Real implementation for getBooks
-async getBooks(search?: string, category?: string): Promise<Book[]> {
-  const queries = [Query.limit(100)];
-  
-  if (search) {
-    queries.push(Query.search('title', search));
-  }
-  
-  if (category) {
-    queries.push(Query.equal('category', category));
-  }
+## 3. Prepare MongoDB
 
-  const response = await databases.listDocuments(
-    DATABASE_ID,
-    BOOKS_COLLECTION,
-    queries
-  );
+Create a database, for example:
 
-  return response.documents as unknown as Book[];
-}
+```text
+online_bookstore
+```
 
-// Example: Real implementation for createOrder
-async createOrder(items: OrderItem[], shippingAddress: string): Promise<Order> {
-  const user = await this.getCurrentUser();
-  if (!user) throw new Error('Not authenticated');
+The Function uses these collections:
 
-  const totalAmount = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  
-  // Encrypt sensitive data
-  const key = await getSessionKey();
-  const encryptedAddress = await encrypt(shippingAddress, key);
+- `books`
+- `orders`
+- `profiles`
 
-  const response = await databases.createDocument(
-    DATABASE_ID,
-    ORDERS_COLLECTION,
-    ID.unique(),
-    {
-      userId: user.$id,
-      items: JSON.stringify(items),
-      totalAmount,
-      status: 'pending',
-      shippingAddress: encryptedAddress,
-      createdAt: new Date().toISOString(),
-    }
-  );
+Indexes are created automatically by the Function on first successful start:
 
-  return {
-    $id: response.$id,
-    userId: response.userId,
-    items: JSON.parse(response.items),
-    totalAmount: response.totalAmount,
-    status: response.status,
-    shippingAddress: await decrypt(response.shippingAddress, key),
-    createdAt: response.createdAt,
-  };
+- `books.isbn` unique
+- `books.category + updatedAt`
+- `orders.userId + createdAt`
+- `orders.status + createdAt`
+- `profiles.userId` unique
+
+### Minimal Book Document Shape
+
+Import or insert book documents like this:
+
+```json
+{
+  "_id": "book_gatsby",
+  "title": "The Great Gatsby",
+  "author": "F. Scott Fitzgerald",
+  "isbn": "978-0743273565",
+  "price": 15.99,
+  "stock": 50,
+  "description": "Classic novel",
+  "category": "Fiction",
+  "publishedYear": 1925,
+  "imageUrl": "https://example.com/gatsby.jpg",
+  "rating": 4.2,
+  "reviewCount": 4821,
+  "isFeatured": true,
+  "isBestseller": true,
+  "isNew": false,
+  "discount": 10,
+  "createdAt": "2026-06-14T10:00:00.000Z",
+  "updatedAt": "2026-06-14T10:00:00.000Z"
 }
 ```
 
-## User Roles Setup
+## 4. Generate the AES-256-GCM Key
 
-### Making a User Admin
+Generate a 32-byte base64 key:
 
-1. Go to **Auth > Users** in Appwrite Console
-2. Click on the user you want to make admin
-3. Go to **Preferences** tab
-4. Add/update JSON:
-   ```json
-   {
-     "role": "admin"
-   }
-   ```
-5. Save
-
-The app will automatically detect the admin role and show admin features.
-
-## Security Configuration
-
-### 1. API Keys (for Server-Side Operations)
-
-If you need server-side operations:
-
-1. Go to **API Keys** in Appwrite Console
-2. Create a new API key
-3. Set appropriate scopes
-4. Store securely (never commit to git)
-
-### 2. Functions (Optional)
-
-For advanced features like payment processing:
-
-1. Go to **Functions** in Appwrite Console
-2. Create a new function
-3. Deploy your server-side code
-4. Configure execution permissions
-
-## AES-256-GCM Encryption
-
-The app uses client-side encryption for sensitive data:
-
-### How It Works
-
-1. **Key Generation**: A unique encryption key is generated per session
-2. **Storage**: Key is stored in sessionStorage (cleared on logout)
-3. **Encryption**: Data is encrypted before sending to Appwrite
-4. **Decryption**: Data is decrypted when retrieved
-
-### What's Encrypted
-
-- Shipping addresses
-- Payment information (if implemented)
-- Any sensitive user data
-
-### Implementation
-
-See `/src/lib/encryption.ts` for the full implementation using Web Crypto API.
-
-## Testing the Setup
-
-### Test Authentication
-
-```typescript
-// Register a new user
-await api.register('test@example.com', 'password123', 'Test User');
-
-// Login
-await api.login('test@example.com', 'password123');
-
-// Get current user
-const user = await api.getCurrentUser();
-console.log(user);
+```powershell
+node -e "console.log(require('node:crypto').randomBytes(32).toString('base64'))"
 ```
 
-### Test Database (if configured)
+Store the output as `AES_KEY_BASE64`.
 
-```typescript
-// Get books
-const books = await api.getBooks();
-console.log(books);
+## 5. Configure Function Environment Variables
 
-// Create a book (admin only)
-const newBook = await api.createBook({
-  title: 'Test Book',
-  author: 'Test Author',
-  isbn: '123-456-789',
-  price: 19.99,
-  stock: 10,
-  description: 'A test book',
-  category: 'Fiction',
-  publishedYear: 2024,
-});
-console.log(newBook);
+The checked-in Function lives at:
+
+```text
+appwrite/functions/bookstore-api
 ```
 
-## Deployment
+Use [appwrite/functions/bookstore-api/.env.example](/E:/all-projects/active/personal/online-bookstore-system/appwrite/functions/bookstore-api/.env.example) as the template.
 
-### Environment Variables for Production
+Required Function variables:
 
-When deploying to production:
+```env
+APPWRITE_ENDPOINT=https://<REGION>.cloud.appwrite.io/v1
+APPWRITE_PROJECT_ID=<APPWRITE_PROJECT_ID>
+APPWRITE_API_KEY=<FUNCTION_API_KEY>
+MONGODB_URI=mongodb+srv://<user>:<password>@<cluster>/?retryWrites=true&w=majority
+MONGODB_DB_NAME=online_bookstore
+AES_KEY_BASE64=<32_BYTE_BASE64_KEY>
+API_BASE_PATH=/api
+CORS_ALLOWED_ORIGINS=http://localhost:5173,https://bookstore.example.com
+```
 
-1. Set environment variables in your hosting platform
-2. Never commit `.env` file to git
-3. Use different Project IDs for development and production
+Notes:
 
-### Recommended Hosting Platforms
+- `APPWRITE_PROJECT_ID` can also be satisfied by `APPWRITE_FUNCTION_PROJECT_ID` at runtime, but keep it explicit in your Function variables.
+- `CORS_ALLOWED_ORIGINS` should be an exact comma-separated allowlist.
+- `API_BASE_PATH` should stay `/api` unless you intentionally change the router.
 
-- **Vercel**: Excellent React support, easy env vars
-- **Netlify**: Simple deployment, good for static sites
-- **Railway**: Full-stack support
-- **Render**: Free tier available
+## 6. Deploy the Function
 
-### Example: Vercel Deployment
+The repository already includes [appwrite.config.json](/E:/all-projects/active/personal/online-bookstore-system/appwrite.config.json) with the Function definition.
+
+Important checked-in settings:
+
+- Function ID: `bookstore-api`
+- Runtime: `node-22`
+- Entrypoint: `src/main.js`
+- Build command: `npm install`
+- Execute access: `any`
+
+Why `execute: any` is intentional:
+
+- The Function domain must be callable over HTTPS.
+- Real authorization is enforced inside the Function with Appwrite JWT validation and admin/user route checks.
+- CORS is still restricted to your allowlist.
+
+Deploy from the repository root:
 
 ```bash
-# Install Vercel CLI
-npm i -g vercel
-
-# Deploy
-vercel
-
-# Set environment variables
-vercel env add VITE_APPWRITE_ENDPOINT
-vercel env add VITE_APPWRITE_PROJECT_ID
+appwrite login
+appwrite push functions
 ```
+
+If you change Function variables or configuration in the Appwrite Console, redeploy so the active deployment matches the code.
+
+## 7. Get the Function Domain
+
+After deployment:
+
+1. Open **Functions** in Appwrite Console.
+2. Open `bookstore-api`.
+3. Copy the generated HTTPS domain or attach a custom domain.
+4. Append `/api` when setting the frontend API base URL.
+
+Example:
+
+```text
+https://bookstore-api-abc123.appwrite.global/api
+```
+
+## 8. Configure Frontend Environment Variables
+
+Create a root `.env` file for Vite from [.env.example](/E:/all-projects/active/personal/online-bookstore-system/.env.example):
+
+```env
+VITE_APPWRITE_ENDPOINT=https://<REGION>.cloud.appwrite.io/v1
+VITE_APPWRITE_PROJECT_ID=<APPWRITE_PROJECT_ID>
+VITE_API_BASE_URL=https://<bookstore-api-function-domain>/api
+```
+
+Requirements:
+
+- `VITE_APPWRITE_ENDPOINT` must be HTTPS unless you are on localhost.
+- `VITE_API_BASE_URL` must be HTTPS unless you are on localhost.
+- Do not put `APPWRITE_API_KEY` in the frontend `.env`.
+
+## 9. Make an Admin User
+
+Admin access is determined from the Appwrite user role preference:
+
+```json
+{
+  "role": "admin"
+}
+```
+
+To set it:
+
+1. Open **Auth > Users**.
+2. Select the user.
+3. Edit **Preferences**.
+4. Save `{"role":"admin"}`.
+
+## 10. Start the Frontend
+
+Install dependencies and run Vite:
+
+```bash
+npm install
+npm run dev
+```
+
+The browser auth flow is:
+
+1. `api.register()` or `api.login()` creates an Appwrite session with the Web SDK.
+2. Protected data requests call `account.createJWT({ duration: 900 })`.
+3. The JWT is sent to the Function as a bearer token.
+
+## Security Checklist
+
+- Use HTTPS for both `VITE_APPWRITE_ENDPOINT` and `VITE_API_BASE_URL`.
+- Keep `APPWRITE_API_KEY` only in Function variables.
+- Keep `CORS_ALLOWED_ORIGINS` exact and minimal.
+- Rotate `AES_KEY_BASE64` and API keys through your secret manager, not source control.
+- Use MongoDB credentials with least privilege.
+- Prefer a custom Function domain in production so the API URL is stable.
+
+## Verification
+
+### Backend tests
+
+Run from the repository root:
+
+```bash
+node --test tests/function/config.test.mjs tests/function/crypto.test.mjs tests/function/router.test.mjs tests/function/auth.test.mjs tests/function/handlers.test.mjs tests/function/books.test.mjs tests/function/app.test.mjs
+```
+
+### Frontend build
+
+```bash
+npm run build
+```
+
+### Smoke test
+
+1. Register a user in the browser.
+2. Promote a user to admin if you need admin routes.
+3. Create or import a few MongoDB `books` documents.
+4. Browse `/books`.
+5. Place an order.
+6. Confirm the `orders` document stores `shippingAddressEncrypted`, not plaintext.
+7. Confirm the `profiles` document stores `addressEncrypted`, not plaintext.
 
 ## Troubleshooting
 
-### Common Issues
+### 401 from the Function
 
-#### 1. CORS Error
+Likely causes:
 
-**Problem:** "Access to fetch... has been blocked by CORS policy"
+- No Appwrite session exists in the browser
+- The frontend is not sending the JWT
+- The JWT expired
 
-**Solution:**
-1. Go to Appwrite Console > Settings
-2. Add your frontend URL to "Platforms"
-3. For web app, add: `http://localhost:5173` (development) and your production URL
+### 403 Origin not allowed
 
-#### 2. Authentication Fails
+Update `CORS_ALLOWED_ORIGINS` in the Function variables and redeploy.
 
-**Problem:** Login/Register not working
+### Empty book catalog
 
-**Solution:**
-1. Verify Email/Password auth is enabled in Appwrite
-2. Check Project ID matches in `.env`
-3. Ensure CORS is configured
+MongoDB is connected, but `books` has no documents yet. Import sample documents into the `books` collection.
 
-#### 3. Database Not Found
+### Appwrite login works but API calls fail
 
-**Problem:** "Database not found" error
+Check:
 
-**Solution:**
-1. Verify database was created
-2. Check Database ID in `.env`
-3. Ensure collection IDs match
+- `VITE_API_BASE_URL` points to the Function domain with `/api`
+- Function execute access is `any`
+- Function variables are set correctly
+- Appwrite Web platform includes the frontend origin
 
-#### 4. Permission Denied
+## File Map
 
-**Problem:** "Permission denied" when accessing data
+- Backend entrypoint: [appwrite/functions/bookstore-api/src/main.js](/E:/all-projects/active/personal/online-bookstore-system/appwrite/functions/bookstore-api/src/main.js)
+- Backend config: [appwrite.config.json](/E:/all-projects/active/personal/online-bookstore-system/appwrite.config.json)
+- Function env template: [appwrite/functions/bookstore-api/.env.example](/E:/all-projects/active/personal/online-bookstore-system/appwrite/functions/bookstore-api/.env.example)
+- Frontend API client: [src/lib/api.ts](/E:/all-projects/active/personal/online-bookstore-system/src/lib/api.ts)
+- Frontend Appwrite client: [src/lib/appwrite.ts](/E:/all-projects/active/personal/online-bookstore-system/src/lib/appwrite.ts)
 
-**Solution:**
-1. Check collection permissions in Appwrite
-2. Verify user role (admin vs user)
-3. Ensure user is authenticated
-
-### Debug Mode
-
-Enable debug logging:
-
-```typescript
-// In /src/lib/appwrite.ts
-import { Client } from 'appwrite';
-
-const client = new Client()
-  .setEndpoint(...)
-  .setProject(...)
-  .setLocale('en-US'); // Optional: Set locale
-
-// Enable logging in development
-if (import.meta.env.DEV) {
-  console.log('Appwrite Config:', {
-    endpoint: import.meta.env.VITE_APPWRITE_ENDPOINT,
-    project: import.meta.env.VITE_APPWRITE_PROJECT_ID,
-  });
-}
-```
-
-## Advanced Features
-
-### 1. Real-time Subscriptions
-
-Monitor changes in real-time:
-
-```typescript
-import { client } from './lib/appwrite';
-
-client.subscribe('databases.[DATABASE_ID].collections.[COLLECTION_ID].documents', response => {
-  console.log('Document updated:', response.payload);
-  // Update UI accordingly
-});
-```
-
-### 2. File Storage
-
-For book covers:
-
-```typescript
-import { Storage } from 'appwrite';
-
-const storage = new Storage(client);
-
-// Upload cover image
-const file = await storage.createFile(
-  'book-covers',
-  ID.unique(),
-  coverFile
-);
-
-// Get image URL
-const imageUrl = storage.getFileView('book-covers', file.$id);
-```
-
-### 3. Server Functions
-
-For complex operations:
-
-```javascript
-// In Appwrite Function
-module.exports = async ({ req, res, log, error }) => {
-  const { bookId, quantity } = JSON.parse(req.body);
-  
-  // Update stock
-  // Process payment
-  // Send confirmation email
-  
-  return res.json({ success: true });
-};
-```
-
-## Support
-
-For issues and questions:
-
-- **Appwrite Docs**: https://appwrite.io/docs
-- **Discord**: https://appwrite.io/discord
-- **GitHub**: https://github.com/appwrite/appwrite
-
-## Next Steps
-
-1. ✅ Set up Appwrite project
-2. ✅ Configure environment variables
-3. ✅ Enable authentication
-4. ⬜ Create database and collections
-5. ⬜ Seed initial data
-6. ⬜ Test all endpoints
-7. ⬜ Deploy to production
-
-Happy coding! 🚀
+Last updated: June 14, 2026
