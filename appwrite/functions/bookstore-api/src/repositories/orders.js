@@ -1,67 +1,93 @@
-function normalizeOrder(document) {
-  if (!document) {
+function normalizeRow(row) {
+  if (!row) {
     return null;
   }
 
-  const { _id, id: _ignored, ...rest } = document;
+  const normalized = {};
+  for (const [key, value] of Object.entries(row)) {
+    if (!key.startsWith('$')) {
+      normalized[key] = value;
+    }
+  }
+
   return {
-    id: String(_id),
-    ...rest,
+    id: String(row.$id ?? row.id),
+    ...normalized,
+    items: parseOrderItems(normalized.items),
   };
 }
 
-export function createOrderRepository(database) {
-  const collection = database.collection('orders');
+function parseOrderItems(value) {
+  if (Array.isArray(value)) {
+    return value;
+  }
 
+  if (typeof value !== 'string' || value.trim() === '') {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function serializeOrderDocument(order) {
+  const { items, ...rest } = order;
+  return {
+    ...rest,
+    items: JSON.stringify(Array.isArray(items) ? items : []),
+  };
+}
+
+function orderSort(left, right) {
+  return (
+    String(right.createdAt ?? '').localeCompare(String(left.createdAt ?? ''))
+    || String(right.id ?? '').localeCompare(String(left.id ?? ''))
+  );
+}
+
+export function createOrderRepository(table) {
   return {
     async create(order) {
-      const { id, ...document } = order;
-      await collection.insertOne({
-        _id: id,
-        ...document,
+      const { id, ...document } = serializeOrderDocument(order);
+      const created = await table.create({
+        rowId: id,
+        data: document,
       });
 
-      return order;
+      return normalizeRow(created);
     },
 
     async getById(orderId) {
-      return normalizeOrder(await collection.findOne({ _id: orderId }));
+      return normalizeRow(await table.get(orderId));
     },
 
     async listByUserId(userId) {
-      const documents = await collection
-        .find({ userId })
-        .sort({ createdAt: -1, _id: -1 })
-        .toArray();
-
-      return documents.map(normalizeOrder);
+      const rows = await table.listAll();
+      return rows
+        .map(normalizeRow)
+        .filter(order => order.userId === userId)
+        .sort(orderSort);
     },
 
     async listAll() {
-      const documents = await collection
-        .find({})
-        .sort({ createdAt: -1, _id: -1 })
-        .toArray();
-
-      return documents.map(normalizeOrder);
+      const rows = await table.listAll();
+      return rows
+        .map(normalizeRow)
+        .sort(orderSort);
     },
 
     async updateStatus(orderId, status) {
-      const updated = await collection.findOneAndUpdate(
-        { _id: orderId },
-        {
-          $set: {
-            status,
-            updatedAt: new Date().toISOString(),
-          },
+      return normalizeRow(await table.update({
+        rowId: orderId,
+        data: {
+          status,
+          updatedAt: new Date().toISOString(),
         },
-        {
-          returnDocument: 'after',
-          includeResultMetadata: false,
-        },
-      );
-
-      return normalizeOrder(updated);
+      }));
     },
   };
 }

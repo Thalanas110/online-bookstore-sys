@@ -66,16 +66,20 @@ export function loadConfig(env = process.env) {
     'APPWRITE_API_KEY',
     'APPWRITE_KEY',
   ]);
-  const mongoUri = requireEnv(env, 'MONGODB_URI', ['MONGODB_URI']);
-  const mongoDbName = requireEnv(env, 'MONGODB_DB_NAME', ['MONGODB_DB_NAME']);
+  const appwriteDatabaseId = requireEnv(env, 'APPWRITE_DATABASE_ID', ['APPWRITE_DATABASE_ID']);
+  const appwriteBooksTableId = requireEnv(env, 'APPWRITE_BOOKS_TABLE_ID', ['APPWRITE_BOOKS_TABLE_ID']);
+  const appwriteOrdersTableId = requireEnv(env, 'APPWRITE_ORDERS_TABLE_ID', ['APPWRITE_ORDERS_TABLE_ID']);
+  const appwriteProfilesTableId = requireEnv(env, 'APPWRITE_PROFILES_TABLE_ID', ['APPWRITE_PROFILES_TABLE_ID']);
   const aesKeyBase64 = requireEnv(env, 'AES_KEY_BASE64', ['AES_KEY_BASE64']);
 
   return {
     appwriteEndpoint,
     appwriteProjectId,
     appwriteApiKey,
-    mongoUri,
-    mongoDbName,
+    appwriteDatabaseId,
+    appwriteBooksTableId,
+    appwriteOrdersTableId,
+    appwriteProfilesTableId,
     apiBasePath: normalizeBasePath(env.API_BASE_PATH ?? '/api'),
     corsAllowedOrigins: parseAllowedOrigins(env.CORS_ALLOWED_ORIGINS ?? ''),
     aesKey: decodeAesKey(aesKeyBase64),

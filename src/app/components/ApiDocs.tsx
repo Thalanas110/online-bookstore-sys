@@ -92,7 +92,7 @@ const GROUPS: EndpointGroup[] = [
         method: 'GET',
         path: '/auth/me',
         auth: 'user',
-        summary: 'Return the authenticated user with MongoDB-backed profile fields.',
+        summary: 'Return the authenticated user with Appwrite-backed profile fields.',
         response: `{
   "$id": "user_abc123",
   "name": "Reader One",
@@ -106,7 +106,7 @@ const GROUPS: EndpointGroup[] = [
   },
   {
     title: 'Users',
-    description: 'Profile data is stored in MongoDB. Address fields are encrypted at rest with AES-256-GCM.',
+    description: 'Profile data is stored in Appwrite TablesDB. Address fields are encrypted at rest with AES-256-GCM.',
     endpoints: [
       {
         method: 'GET',
@@ -126,7 +126,7 @@ const GROUPS: EndpointGroup[] = [
         method: 'PUT',
         path: '/users/profile',
         auth: 'user',
-        summary: 'Update Appwrite name plus MongoDB phone and address.',
+        summary: 'Update Appwrite name plus Appwrite-backed phone and address.',
         request: `{
   "name": "Reader Updated",
   "phone": "+15555550123",
@@ -156,7 +156,7 @@ const GROUPS: EndpointGroup[] = [
   },
   {
     title: 'Books',
-    description: 'Book catalog data is stored in MongoDB. Reads require a valid Appwrite JWT. Writes are admin-only.',
+    description: 'Book catalog data is stored in Appwrite TablesDB. Reads require a valid Appwrite JWT. Writes are admin-only.',
     endpoints: [
       {
         method: 'GET',
@@ -303,7 +303,7 @@ const GROUPS: EndpointGroup[] = [
         method: 'GET',
         path: '/admin/users',
         auth: 'admin',
-        summary: 'List users merged with MongoDB profile data.',
+        summary: 'List users merged with Appwrite-backed profile data.',
         response: `[
   {
     "$id": "user_abc123",
@@ -359,7 +359,7 @@ const GROUPS: EndpointGroup[] = [
   },
   {
     title: 'Reports',
-    description: 'Aggregate reporting endpoints built from MongoDB order and book data.',
+    description: 'Aggregate reporting endpoints built from Appwrite book and order data.',
     endpoints: [
       {
         method: 'GET',
@@ -500,7 +500,7 @@ export function ApiDocs() {
         <div className="flex items-center gap-3 mb-3">
           <h2 className="text-xl">Bookstore Function API</h2>
           <Badge variant="secondary">v1</Badge>
-          <Badge className="bg-emerald-100 text-emerald-700 border-0">MongoDB + Appwrite</Badge>
+          <Badge className="bg-emerald-100 text-emerald-700 border-0">TablesDB + Appwrite</Badge>
         </div>
         <div className="flex items-center gap-2 bg-muted rounded-md px-3 py-2 font-mono text-sm">
           <span className="text-muted-foreground flex-1 truncate">{BASE_URL}</span>

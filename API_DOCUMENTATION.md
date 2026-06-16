@@ -37,7 +37,7 @@ Non-browser clients can use the server auth endpoints below.
 - HTTPS is required for the Function domain and Appwrite endpoint, except for localhost development.
 - CORS is restricted by `CORS_ALLOWED_ORIGINS`.
 - Responses include HSTS, CSP, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, and `Referrer-Policy: no-referrer`.
-- Sensitive profile and order address fields are encrypted server-side with AES-256-GCM before storage in MongoDB.
+- Sensitive profile and order address fields are encrypted server-side with AES-256-GCM before storage in Appwrite TablesDB.
 - Appwrite API keys are never exposed to the frontend.
 
 ## Error Format
@@ -130,7 +130,7 @@ Response `204`
 
 #### `GET /api/auth/me`
 
-Returns the authenticated user plus MongoDB-backed profile fields.
+Returns the authenticated user plus Appwrite-backed profile fields.
 
 Authentication: `user`
 
@@ -157,7 +157,7 @@ Authentication: `user`
 
 #### `PUT /api/users/profile`
 
-Updates Appwrite name plus MongoDB-backed phone and encrypted address.
+Updates Appwrite name plus Appwrite-backed phone and encrypted address.
 
 Authentication: `user`
 
@@ -205,7 +205,7 @@ Response `204`
 
 #### `GET /api/books`
 
-Lists books from MongoDB.
+Lists books from Appwrite TablesDB.
 
 Authentication: `user`
 
@@ -235,8 +235,8 @@ Response `200`:
     "isBestseller": true,
     "isNew": false,
     "discount": 10,
-    "createdAt": "2026-06-14T10:00:00.000Z",
-    "updatedAt": "2026-06-14T10:00:00.000Z"
+    "createdAt": "2026-06-16T10:00:00.000Z",
+    "updatedAt": "2026-06-16T10:00:00.000Z"
   }
 ]
 ```
@@ -295,7 +295,7 @@ Response `204`
 
 #### `POST /api/orders`
 
-Creates an order. Client-supplied prices are ignored; totals are recomputed from MongoDB book data. Shipping address is encrypted with AES-256-GCM before storage.
+Creates an order. Client-supplied prices are ignored; totals are recomputed from stored book data. Shipping address is encrypted with AES-256-GCM before storage.
 
 Authentication: `user`
 
@@ -333,9 +333,9 @@ Response `201`:
   "status": "pending",
   "shippingAddress": "456 Oak Ave, Singapore 654321",
   "trackingNumber": "TRKABC123456",
-  "estimatedDelivery": "2026-06-20T10:00:00.000Z",
-  "createdAt": "2026-06-14T10:00:00.000Z",
-  "updatedAt": "2026-06-14T10:00:00.000Z"
+  "estimatedDelivery": "2026-06-22T10:00:00.000Z",
+  "createdAt": "2026-06-16T10:00:00.000Z",
+  "updatedAt": "2026-06-16T10:00:00.000Z"
 }
 ```
 
@@ -355,7 +355,7 @@ Authentication: `user`
 
 #### `GET /api/admin/users`
 
-Lists Appwrite users merged with MongoDB profile data.
+Lists Appwrite users merged with Appwrite-backed profile data.
 
 Authentication: `admin`
 
@@ -447,9 +447,9 @@ Returns:
       "totalAmount": 28.78,
       "status": "pending",
       "trackingNumber": "TRKABC123456",
-      "estimatedDelivery": "2026-06-20T10:00:00.000Z",
-      "createdAt": "2026-06-14T10:00:00.000Z",
-      "updatedAt": "2026-06-14T10:00:00.000Z"
+      "estimatedDelivery": "2026-06-22T10:00:00.000Z",
+      "createdAt": "2026-06-16T10:00:00.000Z",
+      "updatedAt": "2026-06-16T10:00:00.000Z"
     }
   ]
 }
@@ -512,7 +512,11 @@ curl -X POST "https://<bookstore-api-function-domain>/api/auth/login" \
 
 ## Data Storage
 
-MongoDB collections used by the Function:
+Appwrite database used by the Function:
+
+- `online-bookstore`
+
+Appwrite tables used by the Function:
 
 - `books`
 - `orders`
@@ -523,7 +527,11 @@ Encrypted fields at rest:
 - `profiles.addressEncrypted`
 - `orders.shippingAddressEncrypted`
 
+Notes:
+
+- `orders.items` is stored as serialized JSON text in TablesDB and parsed back by the Function.
+
 ## Version
 
 - API version: `v1`
-- Last updated: June 14, 2026
+- Last updated: June 16, 2026

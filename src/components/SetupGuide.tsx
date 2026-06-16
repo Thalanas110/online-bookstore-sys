@@ -11,10 +11,10 @@ export function SetupGuide() {
         <CardHeader>
           <div className="flex items-center gap-2 mb-2">
             <Code className="size-6 text-primary" />
-            <CardTitle className="text-2xl">Appwrite + MongoDB Setup Required</CardTitle>
+            <CardTitle className="text-2xl">Appwrite TablesDB Setup Required</CardTitle>
           </div>
           <CardDescription>
-            This build expects real Appwrite authentication, a deployed Appwrite Function, and MongoDB storage.
+            This build expects real Appwrite authentication, a deployed Appwrite Function, and Appwrite TablesDB storage.
           </CardDescription>
         </CardHeader>
 
@@ -39,6 +39,7 @@ export function SetupGuide() {
                   <li>Add a Web platform for `http://localhost:5173` and your production frontend origin.</li>
                   <li>Enable Email/Password authentication.</li>
                   <li>Create a Function API key with `users.read` and `users.write` scopes.</li>
+                  <li>Push or create the `online-bookstore` database with `books`, `orders`, and `profiles` tables.</li>
                   <li>Deploy the checked-in `bookstore-api` Function.</li>
                 </ol>
 
@@ -60,6 +61,7 @@ VITE_API_BASE_URL=https://<bookstore-api-function-domain>/api`}
                   <li>Add a Web platform for your frontend origin.</li>
                   <li>Enable Email/Password authentication.</li>
                   <li>Create the same Function API key scopes: `users.read`, `users.write`.</li>
+                  <li>Create the same `online-bookstore` database and table IDs.</li>
                   <li>Deploy the checked-in Function and use its HTTPS domain for `VITE_API_BASE_URL`.</li>
                 </ol>
 
@@ -85,15 +87,17 @@ VITE_API_BASE_URL=http://bookstore-api.localhost/api`}
 {`APPWRITE_ENDPOINT=https://<REGION>.cloud.appwrite.io/v1
 APPWRITE_PROJECT_ID=<APPWRITE_PROJECT_ID>
 APPWRITE_API_KEY=<FUNCTION_API_KEY>
-MONGODB_URI=mongodb+srv://<user>:<password>@<cluster>/?retryWrites=true&w=majority
-MONGODB_DB_NAME=online_bookstore
+APPWRITE_DATABASE_ID=online-bookstore
+APPWRITE_BOOKS_TABLE_ID=books
+APPWRITE_ORDERS_TABLE_ID=orders
+APPWRITE_PROFILES_TABLE_ID=profiles
 AES_KEY_BASE64=<32_BYTE_BASE64_KEY>
 API_BASE_PATH=/api
 CORS_ALLOWED_ORIGINS=http://localhost:5173,https://bookstore.example.com`}
               </pre>
             </div>
             <p className="text-sm text-muted-foreground">
-              The Function creates MongoDB indexes automatically on first successful start.
+              The checked-in Appwrite table schema defines the database, tables, and indexes expected by the Function.
             </p>
           </div>
 
@@ -103,7 +107,7 @@ CORS_ALLOWED_ORIGINS=http://localhost:5173,https://bookstore.example.com`}
               <li>All frontend-to-backend traffic should use HTTPS.</li>
               <li>Keep `APPWRITE_API_KEY` only in Function environment variables.</li>
               <li>Use exact `CORS_ALLOWED_ORIGINS`; do not use a wildcard.</li>
-              <li>Addresses are encrypted server-side with AES-256-GCM before MongoDB storage.</li>
+              <li>Addresses are encrypted server-side with AES-256-GCM before Appwrite TablesDB storage.</li>
               <li>Admin access is determined by Appwrite user preferences: `{"role":"admin"}`.</li>
             </ul>
           </div>

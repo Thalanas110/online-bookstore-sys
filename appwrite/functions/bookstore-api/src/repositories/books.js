@@ -1,76 +1,90 @@
 import { HttpError } from '../errors.js';
 
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function normalizeBook(document) {
-  if (!document) {
+function normalizeRow(row) {
+  if (!row) {
     return null;
   }
 
-  const { _id, id: _ignored, ...rest } = document;
+  const normalized = {};
+  for (const [key, value] of Object.entries(row)) {
+    if (!key.startsWith('$')) {
+      normalized[key] = value;
+    }
+  }
+
   return {
-    id: String(_id),
-    ...rest,
+    id: String(row.$id ?? row.id),
+    ...normalized,
   };
+}
+
+function normalizeSearchValue(value) {
+  return String(value ?? '').trim().toLowerCase();
 }
 
 function toDuplicateBookError() {
   return new HttpError(409, 'conflict', 'A book with this ISBN already exists');
 }
 
-function isDuplicateKeyError(error) {
-  return error?.code === 11000;
+function isConflictError(error) {
+  return Number(error?.code) === 409;
 }
 
-export function createBookRepository(database) {
-  const collection = database.collection('books');
+function bookSort(left, right) {
+  return (
+    Number(Boolean(right.isFeatured)) - Number(Boolean(left.isFeatured))
+    || String(right.updatedAt ?? '').localeCompare(String(left.updatedAt ?? ''))
+    || String(right.createdAt ?? '').localeCompare(String(left.createdAt ?? ''))
+    || String(left.title ?? '').localeCompare(String(right.title ?? ''))
+  );
+}
 
+export function createBookRepository(table) {
   return {
     async list({ search, category } = {}) {
-      const filter = {};
+      const searchValue = normalizeSearchValue(search);
+      const categoryValue = normalizeSearchValue(category);
+      const rows = await table.listAll();
+      const books = rows.map(normalizeRow);
 
-      if (category && category !== 'all') {
-        filter.category = category;
-      }
+      return books
+        .filter(book => {
+          if (categoryValue && categoryValue !== 'all' && normalizeSearchValue(book.category) !== categoryValue) {
+            return false;
+          }
 
-      if (search) {
-        const pattern = escapeRegExp(search.trim());
-        filter.$or = [
-          { title: { $regex: pattern, $options: 'i' } },
-          { author: { $regex: pattern, $options: 'i' } },
-          { isbn: { $regex: pattern, $options: 'i' } },
-          { category: { $regex: pattern, $options: 'i' } },
-        ];
-      }
+          if (!searchValue) {
+            return true;
+          }
 
-      const documents = await collection
-        .find(filter)
-        .sort({ isFeatured: -1, updatedAt: -1, createdAt: -1, title: 1 })
-        .toArray();
-
-      return documents.map(normalizeBook);
+          return [
+            book.title,
+            book.author,
+            book.isbn,
+            book.category,
+          ].some(field => normalizeSearchValue(field).includes(searchValue));
+        })
+        .sort(bookSort);
     },
 
     async getById(bookId) {
-      return normalizeBook(await collection.findOne({ _id: bookId }));
+      return normalizeRow(await table.get(bookId));
     },
 
     async getRawById(bookId) {
-      return normalizeBook(await collection.findOne({ _id: bookId }));
+      return normalizeRow(await table.get(bookId));
     },
 
     async create(book) {
       try {
         const { id, ...document } = book;
-        await collection.insertOne({
-          _id: id,
-          ...document,
+        const created = await table.create({
+          rowId: id,
+          data: document,
         });
-        return book;
+        return normalizeRow(created);
       } catch (error) {
-        if (isDuplicateKeyError(error)) {
+        if (isConflictError(error)) {
           throw toDuplicateBookError();
         }
 
@@ -80,18 +94,12 @@ export function createBookRepository(database) {
 
     async update(bookId, updates) {
       try {
-        const updated = await collection.findOneAndUpdate(
-          { _id: bookId },
-          { $set: updates },
-          {
-            returnDocument: 'after',
-            includeResultMetadata: false,
-          },
-        );
-
-        return normalizeBook(updated);
+        return normalizeRow(await table.update({
+          rowId: bookId,
+          data: updates,
+        }));
       } catch (error) {
-        if (isDuplicateKeyError(error)) {
+        if (isConflictError(error)) {
           throw toDuplicateBookError();
         }
 
@@ -100,8 +108,7 @@ export function createBookRepository(database) {
     },
 
     async delete(bookId) {
-      const result = await collection.deleteOne({ _id: bookId });
-      return result.deletedCount === 1;
+      return table.delete(bookId);
     },
 
     async reserveStock(items) {
@@ -109,22 +116,25 @@ export function createBookRepository(database) {
 
       try {
         for (const item of items) {
-          const updated = await collection.findOneAndUpdate(
-            {
-              _id: item.bookId,
-              stock: { $gte: item.quantity },
-            },
-            {
-              $inc: { stock: -item.quantity },
-              $set: { updatedAt: new Date().toISOString() },
-            },
-            {
-              returnDocument: 'after',
-              includeResultMetadata: false,
-            },
-          );
+          const updatedAt = new Date().toISOString();
+          const updated = await table.decrementNumberField({
+            rowId: item.bookId,
+            field: 'stock',
+            amount: item.quantity,
+            updatedAt,
+          });
 
           if (!updated) {
+            throw new HttpError(409, 'conflict', `Insufficient stock for book: ${item.bookId}`);
+          }
+
+          if (Number(updated.stock) < 0) {
+            await table.incrementNumberField({
+              rowId: item.bookId,
+              field: 'stock',
+              amount: item.quantity,
+              updatedAt: new Date().toISOString(),
+            });
             throw new HttpError(409, 'conflict', `Insufficient stock for book: ${item.bookId}`);
           }
 
@@ -141,13 +151,12 @@ export function createBookRepository(database) {
 
     async releaseStock(items) {
       await Promise.all(
-        items.map(item => collection.updateOne(
-          { _id: item.bookId },
-          {
-            $inc: { stock: item.quantity },
-            $set: { updatedAt: new Date().toISOString() },
-          },
-        )),
+        items.map(item => table.incrementNumberField({
+          rowId: item.bookId,
+          field: 'stock',
+          amount: item.quantity,
+          updatedAt: new Date().toISOString(),
+        })),
       );
     },
   };

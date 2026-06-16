@@ -1,42 +1,47 @@
-function normalizeProfile(document) {
-  if (!document) {
+function normalizeRow(row) {
+  if (!row) {
     return null;
   }
 
-  const { _id, ...rest } = document;
-  return rest;
+  const normalized = {};
+  for (const [key, value] of Object.entries(row)) {
+    if (!key.startsWith('$') && key !== 'id') {
+      normalized[key] = value;
+    }
+  }
+
+  return normalized;
 }
 
-export function createProfileRepository(database) {
-  const collection = database.collection('profiles');
-
+export function createProfileRepository(table) {
   return {
     async getByUserId(userId) {
-      return normalizeProfile(await collection.findOne({ userId }));
+      return normalizeRow(await table.get(userId));
     },
 
     async upsert(profile) {
-      const updated = await collection.findOneAndUpdate(
-        { userId: profile.userId },
-        {
-          $set: {
-            userId: profile.userId,
-            phone: profile.phone,
-            addressEncrypted: profile.addressEncrypted,
-            updatedAt: profile.updatedAt,
-          },
-          $setOnInsert: {
-            createdAt: profile.updatedAt,
-          },
-        },
-        {
-          upsert: true,
-          returnDocument: 'after',
-          includeResultMetadata: false,
-        },
-      );
+      const document = {
+        userId: profile.userId,
+        phone: profile.phone,
+        addressEncrypted: profile.addressEncrypted,
+        updatedAt: profile.updatedAt,
+      };
+      const existing = await table.get(profile.userId);
 
-      return normalizeProfile(updated);
+      if (existing) {
+        return normalizeRow(await table.update({
+          rowId: profile.userId,
+          data: document,
+        }));
+      }
+
+      return normalizeRow(await table.create({
+        rowId: profile.userId,
+        data: {
+          ...document,
+          createdAt: profile.updatedAt,
+        },
+      }));
     },
 
     async listByUserIds(userIds) {
@@ -44,13 +49,12 @@ export function createProfileRepository(database) {
         return [];
       }
 
-      const documents = await collection.find({
-        userId: {
-          $in: userIds,
-        },
-      }).toArray();
+      const allowedUserIds = new Set(userIds);
+      const rows = await table.listAll();
 
-      return documents.map(normalizeProfile);
+      return rows
+        .map(normalizeRow)
+        .filter(profile => allowedUserIds.has(profile.userId));
     },
   };
 }

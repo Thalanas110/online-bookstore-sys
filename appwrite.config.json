@@ -1,7 +1,131 @@
 {
-  "projectId": "YOUR_APPWRITE_PROJECT_ID",
-  "projectName": "Online Bookstore System",
-  "endpoint": "https://cloud.appwrite.io/v1",
+  "organizationId": "6a313aa00011cb157646",
+  "projectId": "6a313ac20029becb248b",
+  "projectName": "bookstore-mgmt",
+  "endpoint": "https://sgp.cloud.appwrite.io/v1",
+  "settings": {
+    "services": {
+      "account": true,
+      "avatars": true,
+      "databases": true,
+      "locale": true,
+      "health": true,
+      "storage": true,
+      "teams": true,
+      "users": true,
+      "sites": true,
+      "functions": true,
+      "graphql": true,
+      "messaging": true
+    },
+    "protocols": {
+      "rest": true,
+      "graphql": true,
+      "websocket": true
+    },
+    "auth": {
+      "methods": {
+        "jwt": true,
+        "phone": true,
+        "invites": true,
+        "anonymous": true,
+        "email-otp": true,
+        "magic-url": true,
+        "email-password": true
+      },
+      "security": {
+        "duration": 31536000,
+        "limit": 0,
+        "sessionsLimit": 0,
+        "passwordHistory": 0,
+        "passwordDictionary": false,
+        "personalDataCheck": false,
+        "sessionAlerts": false,
+        "mockNumbers": []
+      }
+    }
+  },
+  "tablesDB": [
+    {
+      "$id": "online-bookstore",
+      "name": "Online Bookstore",
+      "enabled": true
+    }
+  ],
+  "tables": [
+    {
+      "$id": "books",
+      "$permissions": [],
+      "databaseId": "online-bookstore",
+      "name": "books",
+      "enabled": true,
+      "rowSecurity": false,
+      "columns": [
+        { "key": "title", "type": "varchar", "required": true, "size": 255 },
+        { "key": "author", "type": "varchar", "required": true, "size": 255 },
+        { "key": "isbn", "type": "varchar", "required": true, "size": 32 },
+        { "key": "price", "type": "float", "required": true },
+        { "key": "stock", "type": "integer", "required": true },
+        { "key": "description", "type": "text", "required": true },
+        { "key": "category", "type": "varchar", "required": true, "size": 120 },
+        { "key": "publishedYear", "type": "integer", "required": true },
+        { "key": "imageUrl", "type": "url", "required": true },
+        { "key": "rating", "type": "float", "required": true },
+        { "key": "reviewCount", "type": "integer", "required": true },
+        { "key": "isFeatured", "type": "boolean", "required": true },
+        { "key": "isBestseller", "type": "boolean", "required": true },
+        { "key": "isNew", "type": "boolean", "required": true },
+        { "key": "discount", "type": "float", "required": true },
+        { "key": "createdAt", "type": "datetime", "required": true },
+        { "key": "updatedAt", "type": "datetime", "required": true }
+      ],
+      "indexes": [
+        { "key": "uniq_books_isbn", "type": "unique", "attributes": ["isbn"] },
+        { "key": "books_category_updatedAt", "type": "key", "attributes": ["category", "updatedAt"] }
+      ]
+    },
+    {
+      "$id": "orders",
+      "$permissions": [],
+      "databaseId": "online-bookstore",
+      "name": "orders",
+      "enabled": true,
+      "rowSecurity": false,
+      "columns": [
+        { "key": "userId", "type": "varchar", "required": true, "size": 128 },
+        { "key": "items", "type": "longtext", "required": true },
+        { "key": "totalAmount", "type": "float", "required": true },
+        { "key": "status", "type": "varchar", "required": true, "size": 32 },
+        { "key": "shippingAddressEncrypted", "type": "longtext", "required": true },
+        { "key": "createdAt", "type": "datetime", "required": true },
+        { "key": "updatedAt", "type": "datetime", "required": true },
+        { "key": "trackingNumber", "type": "varchar", "required": true, "size": 32 },
+        { "key": "estimatedDelivery", "type": "datetime", "required": true }
+      ],
+      "indexes": [
+        { "key": "orders_user_createdAt", "type": "key", "attributes": ["userId", "createdAt"] },
+        { "key": "orders_status_createdAt", "type": "key", "attributes": ["status", "createdAt"] }
+      ]
+    },
+    {
+      "$id": "profiles",
+      "$permissions": [],
+      "databaseId": "online-bookstore",
+      "name": "profiles",
+      "enabled": true,
+      "rowSecurity": false,
+      "columns": [
+        { "key": "userId", "type": "varchar", "required": true, "size": 128 },
+        { "key": "phone", "type": "varchar", "required": false, "size": 40 },
+        { "key": "addressEncrypted", "type": "longtext", "required": false },
+        { "key": "createdAt", "type": "datetime", "required": true },
+        { "key": "updatedAt", "type": "datetime", "required": true }
+      ],
+      "indexes": [
+        { "key": "uniq_profiles_userId", "type": "unique", "attributes": ["userId"] }
+      ]
+    }
+  ],
   "functions": [
     {
       "$id": "bookstore-api",

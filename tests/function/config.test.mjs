@@ -7,8 +7,10 @@ const VALID_ENV = {
   APPWRITE_ENDPOINT: 'https://example.appwrite.io/v1',
   APPWRITE_PROJECT_ID: 'bookstore-project',
   APPWRITE_API_KEY: 'secret-api-key',
-  MONGODB_URI: 'mongodb+srv://user:pass@example.mongodb.net/?retryWrites=true&w=majority',
-  MONGODB_DB_NAME: 'bookstore',
+  APPWRITE_DATABASE_ID: 'bookstore-db',
+  APPWRITE_BOOKS_TABLE_ID: 'books',
+  APPWRITE_ORDERS_TABLE_ID: 'orders',
+  APPWRITE_PROFILES_TABLE_ID: 'profiles',
   AES_KEY_BASE64: Buffer.alloc(32, 7).toString('base64'),
 };
 
@@ -29,8 +31,8 @@ test('loadConfig returns normalized settings when environment is valid', () => {
 
 test('loadConfig throws when a required variable is missing', () => {
   assert.throws(
-    () => loadConfig({ ...VALID_ENV, MONGODB_URI: '' }),
-    /MONGODB_URI/,
+    () => loadConfig({ ...VALID_ENV, APPWRITE_DATABASE_ID: '' }),
+    /APPWRITE_DATABASE_ID/,
   );
 });
 

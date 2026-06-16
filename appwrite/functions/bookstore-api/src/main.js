@@ -1,14 +1,14 @@
 import { createApplication } from './app.js';
 import { createAppwriteService } from './appwrite.js';
 import { loadConfig } from './config.js';
-import { getMongoDatabase } from './mongo.js';
 import { createRouteHandlers } from './services.js';
+import { createTablesDatabase } from './tablesdb.js';
 
 let bootstrapPromise;
 
 async function bootstrap() {
   const config = loadConfig(process.env);
-  const database = await getMongoDatabase(config);
+  const database = await createTablesDatabase(config);
   const appwrite = createAppwriteService(config);
   const routeHandlers = createRouteHandlers({
     appwrite,

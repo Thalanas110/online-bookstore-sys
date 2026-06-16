@@ -1,10 +1,10 @@
 # Appwrite Setup Guide
 
-Setup for the production architecture in this repository:
+Setup for the current production architecture in this repository:
 
-- Appwrite Authentication for user identity and browser sessions
+- Appwrite Authentication for browser and server identity
 - Appwrite Function `bookstore-api` for all `/api/...` server endpoints
-- MongoDB for books, orders, and profile storage
+- Appwrite Databases / TablesDB for `books`, `orders`, and `profiles`
 - AES-256-GCM encryption in the Function for sensitive fields
 
 ## Architecture
@@ -12,19 +12,21 @@ Setup for the production architecture in this repository:
 1. The browser signs in directly with Appwrite using the Web SDK.
 2. The browser creates a short-lived Appwrite JWT for each backend request.
 3. The browser calls the Appwrite Function domain over HTTPS.
-4. The Function validates the JWT with Appwrite, applies user/admin authorization, and reads or writes MongoDB.
+4. The Function validates the JWT with Appwrite, applies user/admin authorization, and reads or writes Appwrite TablesDB.
 5. Shipping and profile addresses are encrypted server-side with AES-256-GCM before being stored.
 
 ## Prerequisites
 
 - An Appwrite Cloud or self-hosted Appwrite project
-- A MongoDB deployment
 - Node.js 22+ for local work
 - Appwrite CLI installed and logged in
 
-CLI reference: `appwrite push functions` is the primary deploy command according to the current Appwrite CLI docs.
+CLI references:
 
-## 1. Create the Appwrite Project
+- `appwrite push tables`
+- `appwrite push functions`
+
+## 1. Create The Appwrite Project
 
 1. Create a new Appwrite project.
 2. Add a Web platform for every frontend origin you will use.
@@ -42,7 +44,7 @@ For production, include your real frontend origin, for example:
 https://bookstore.example.com
 ```
 
-## 2. Create the Function API Key
+## 2. Create The Function API Key
 
 Create an Appwrite API key for the Function with these scopes:
 
@@ -51,21 +53,22 @@ Create an Appwrite API key for the Function with these scopes:
 
 This key is only used inside the Function. Do not expose it to the frontend.
 
-## 3. Prepare MongoDB
+## 3. Push The Database Schema
 
-Create a database, for example:
+This repository now includes the Appwrite database and table definitions in [appwrite.config.json](/E:/all-projects/active/personal/online-bookstore-system/appwrite.config.json):
 
-```text
-online_bookstore
+- Database ID: `online-bookstore`
+- Table ID: `books`
+- Table ID: `orders`
+- Table ID: `profiles`
+
+Push them from the repository root:
+
+```bash
+appwrite push tables
 ```
 
-The Function uses these collections:
-
-- `books`
-- `orders`
-- `profiles`
-
-Indexes are created automatically by the Function on first successful start:
+The checked-in schema creates these indexes:
 
 - `books.isbn` unique
 - `books.category + updatedAt`
@@ -73,13 +76,17 @@ Indexes are created automatically by the Function on first successful start:
 - `orders.status + createdAt`
 - `profiles.userId` unique
 
-### Minimal Book Document Shape
+### Notes About Stored Shapes
 
-Import or insert book documents like this:
+- `orders.items` is stored as serialized JSON text in TablesDB and parsed back by the Function.
+- `profiles.addressEncrypted` and `orders.shippingAddressEncrypted` remain encrypted strings at rest.
+
+### Minimal Book Seed Row
+
+After the schema exists, create at least one `books` row in Appwrite Console or via API:
 
 ```json
 {
-  "_id": "book_gatsby",
   "title": "The Great Gatsby",
   "author": "F. Scott Fitzgerald",
   "isbn": "978-0743273565",
@@ -95,12 +102,14 @@ Import or insert book documents like this:
   "isBestseller": true,
   "isNew": false,
   "discount": 10,
-  "createdAt": "2026-06-14T10:00:00.000Z",
-  "updatedAt": "2026-06-14T10:00:00.000Z"
+  "createdAt": "2026-06-16T10:00:00.000Z",
+  "updatedAt": "2026-06-16T10:00:00.000Z"
 }
 ```
 
-## 4. Generate the AES-256-GCM Key
+Use the row ID you want exposed by the API, for example `book_gatsby`.
+
+## 4. Generate The AES-256-GCM Key
 
 Generate a 32-byte base64 key:
 
@@ -126,8 +135,10 @@ Required Function variables:
 APPWRITE_ENDPOINT=https://<REGION>.cloud.appwrite.io/v1
 APPWRITE_PROJECT_ID=<APPWRITE_PROJECT_ID>
 APPWRITE_API_KEY=<FUNCTION_API_KEY>
-MONGODB_URI=mongodb+srv://<user>:<password>@<cluster>/?retryWrites=true&w=majority
-MONGODB_DB_NAME=online_bookstore
+APPWRITE_DATABASE_ID=online-bookstore
+APPWRITE_BOOKS_TABLE_ID=books
+APPWRITE_ORDERS_TABLE_ID=orders
+APPWRITE_PROFILES_TABLE_ID=profiles
 AES_KEY_BASE64=<32_BYTE_BASE64_KEY>
 API_BASE_PATH=/api
 CORS_ALLOWED_ORIGINS=http://localhost:5173,https://bookstore.example.com
@@ -139,11 +150,9 @@ Notes:
 - `CORS_ALLOWED_ORIGINS` should be an exact comma-separated allowlist.
 - `API_BASE_PATH` should stay `/api` unless you intentionally change the router.
 
-## 6. Deploy the Function
+## 6. Deploy The Function
 
-The repository already includes [appwrite.config.json](/E:/all-projects/active/personal/online-bookstore-system/appwrite.config.json) with the Function definition.
-
-Important checked-in settings:
+Important checked-in Function settings:
 
 - Function ID: `bookstore-api`
 - Runtime: `node-22`
@@ -160,13 +169,16 @@ Why `execute: any` is intentional:
 Deploy from the repository root:
 
 ```bash
-appwrite login
+appwrite push functions --with-variables
+```
+
+If you already saved variables in the Console and do not want local `.env` to overwrite them, use:
+
+```bash
 appwrite push functions
 ```
 
-If you change Function variables or configuration in the Appwrite Console, redeploy so the active deployment matches the code.
-
-## 7. Get the Function Domain
+## 7. Get The Function Domain
 
 After deployment:
 
@@ -197,7 +209,7 @@ Requirements:
 - `VITE_API_BASE_URL` must be HTTPS unless you are on localhost.
 - Do not put `APPWRITE_API_KEY` in the frontend `.env`.
 
-## 9. Make an Admin User
+## 9. Make An Admin User
 
 Admin access is determined from the Appwrite user role preference:
 
@@ -214,7 +226,7 @@ To set it:
 3. Edit **Preferences**.
 4. Save `{"role":"admin"}`.
 
-## 10. Start the Frontend
+## 10. Start The Frontend
 
 Install dependencies and run Vite:
 
@@ -235,8 +247,8 @@ The browser auth flow is:
 - Keep `APPWRITE_API_KEY` only in Function variables.
 - Keep `CORS_ALLOWED_ORIGINS` exact and minimal.
 - Rotate `AES_KEY_BASE64` and API keys through your secret manager, not source control.
-- Use MongoDB credentials with least privilege.
 - Prefer a custom Function domain in production so the API URL is stable.
+- Treat direct table access as disabled for clients; this app is designed to use the Function boundary.
 
 ## Verification
 
@@ -245,7 +257,7 @@ The browser auth flow is:
 Run from the repository root:
 
 ```bash
-node --test tests/function/config.test.mjs tests/function/crypto.test.mjs tests/function/router.test.mjs tests/function/auth.test.mjs tests/function/handlers.test.mjs tests/function/books.test.mjs tests/function/app.test.mjs
+node --test tests/function/config.test.mjs tests/function/crypto.test.mjs tests/function/router.test.mjs tests/function/auth.test.mjs tests/function/handlers.test.mjs tests/function/books.test.mjs tests/function/app.test.mjs tests/function/repositories.test.mjs tests/function/tablesdb.test.mjs
 ```
 
 ### Frontend build
@@ -258,11 +270,11 @@ npm run build
 
 1. Register a user in the browser.
 2. Promote a user to admin if you need admin routes.
-3. Create or import a few MongoDB `books` documents.
+3. Create or import a few Appwrite `books` rows.
 4. Browse `/books`.
 5. Place an order.
-6. Confirm the `orders` document stores `shippingAddressEncrypted`, not plaintext.
-7. Confirm the `profiles` document stores `addressEncrypted`, not plaintext.
+6. Confirm the `orders` row stores `shippingAddressEncrypted`, not plaintext.
+7. Confirm the `profiles` row stores `addressEncrypted`, not plaintext.
 
 ## Troubleshooting
 
@@ -280,7 +292,7 @@ Update `CORS_ALLOWED_ORIGINS` in the Function variables and redeploy.
 
 ### Empty book catalog
 
-MongoDB is connected, but `books` has no documents yet. Import sample documents into the `books` collection.
+The Appwrite schema exists, but the `books` table has no rows yet. Create or import sample `books` rows.
 
 ### Appwrite login works but API calls fail
 
@@ -290,13 +302,15 @@ Check:
 - Function execute access is `any`
 - Function variables are set correctly
 - Appwrite Web platform includes the frontend origin
+- The expected database and tables were pushed successfully
 
 ## File Map
 
 - Backend entrypoint: [appwrite/functions/bookstore-api/src/main.js](/E:/all-projects/active/personal/online-bookstore-system/appwrite/functions/bookstore-api/src/main.js)
+- TablesDB bootstrap: [appwrite/functions/bookstore-api/src/tablesdb.js](/E:/all-projects/active/personal/online-bookstore-system/appwrite/functions/bookstore-api/src/tablesdb.js)
 - Backend config: [appwrite.config.json](/E:/all-projects/active/personal/online-bookstore-system/appwrite.config.json)
 - Function env template: [appwrite/functions/bookstore-api/.env.example](/E:/all-projects/active/personal/online-bookstore-system/appwrite/functions/bookstore-api/.env.example)
 - Frontend API client: [src/lib/api.ts](/E:/all-projects/active/personal/online-bookstore-system/src/lib/api.ts)
 - Frontend Appwrite client: [src/lib/appwrite.ts](/E:/all-projects/active/personal/online-bookstore-system/src/lib/appwrite.ts)
 
-Last updated: June 14, 2026
+Last updated: June 16, 2026

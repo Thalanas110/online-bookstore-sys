@@ -68,9 +68,9 @@ function createRouteHandlerMap(services) {
 export function createRouteHandlers({ appwrite, config, database }) {
   const services = {
     appwrite,
-    books: createBookRepository(database),
-    orders: createOrderRepository(database),
-    profiles: createProfileRepository(database),
+    books: createBookRepository(database.books),
+    orders: createOrderRepository(database.orders),
+    profiles: createProfileRepository(database.profiles),
     crypto: createCryptoService(config.aesKey),
     clock: {
       nowIso() {
