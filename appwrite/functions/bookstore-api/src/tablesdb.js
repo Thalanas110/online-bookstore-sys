@@ -21,7 +21,7 @@ function readRows(response) {
   return [];
 }
 
-function createTableGateway({ tablesDB, databaseId, tableId, Query, Operator }) {
+function createTableGateway({ tablesDB, databaseId, tableId, Query }) {
   return {
     async listAll() {
       const rows = [];
@@ -119,12 +119,23 @@ function createTableGateway({ tablesDB, databaseId, tableId, Query, Operator }) 
 
     async decrementNumberField({ rowId, field, amount, updatedAt }) {
       try {
-        return await tablesDB.updateRow({
+        const row = await tablesDB.decrementRowColumn({
+          databaseId,
+          tableId,
+          rowId,
+          column: field,
+          value: amount,
+        });
+
+        if (!updatedAt) {
+          return row;
+        }
+
+        return tablesDB.updateRow({
           databaseId,
           tableId,
           rowId,
           data: {
-            [field]: Operator.decrement(amount),
             updatedAt,
           },
         });
@@ -139,12 +150,23 @@ function createTableGateway({ tablesDB, databaseId, tableId, Query, Operator }) 
 
     async incrementNumberField({ rowId, field, amount, updatedAt }) {
       try {
-        return await tablesDB.updateRow({
+        const row = await tablesDB.incrementRowColumn({
+          databaseId,
+          tableId,
+          rowId,
+          column: field,
+          value: amount,
+        });
+
+        if (!updatedAt) {
+          return row;
+        }
+
+        return tablesDB.updateRow({
           databaseId,
           tableId,
           rowId,
           data: {
-            [field]: Operator.increment(amount),
             updatedAt,
           },
         });
@@ -164,11 +186,12 @@ async function resolveSdk(sdk) {
     return sdk;
   }
 
-  return import('node-appwrite');
+  const module = await import('node-appwrite');
+  return module.default ?? module;
 }
 
 export async function createTablesDatabase(config, sdk) {
-  const { Client, TablesDB, Query, Operator } = await resolveSdk(sdk);
+  const { Client, TablesDB, Query } = await resolveSdk(sdk);
   const client = createBaseClient(config, Client);
   const tablesDB = new TablesDB(client);
 
@@ -178,21 +201,18 @@ export async function createTablesDatabase(config, sdk) {
       databaseId: config.appwriteDatabaseId,
       tableId: config.appwriteBooksTableId,
       Query,
-      Operator,
     }),
     orders: createTableGateway({
       tablesDB,
       databaseId: config.appwriteDatabaseId,
       tableId: config.appwriteOrdersTableId,
       Query,
-      Operator,
     }),
     profiles: createTableGateway({
       tablesDB,
       databaseId: config.appwriteDatabaseId,
       tableId: config.appwriteProfilesTableId,
       Query,
-      Operator,
     }),
   };
 }

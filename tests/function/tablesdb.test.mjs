@@ -57,6 +57,20 @@ class FakeTablesDB {
     this.rows.set(`${tableId}:${rowId}`, row);
     return { ...row };
   }
+
+  async decrementRowColumn({ tableId, rowId, column, value }) {
+    const current = this.rows.get(`${tableId}:${rowId}`);
+    const row = { ...current, [column]: current[column] - value };
+    this.rows.set(`${tableId}:${rowId}`, row);
+    return { ...row };
+  }
+
+  async incrementRowColumn({ tableId, rowId, column, value }) {
+    const current = this.rows.get(`${tableId}:${rowId}`);
+    const row = { ...current, [column]: current[column] + value };
+    this.rows.set(`${tableId}:${rowId}`, row);
+    return { ...row };
+  }
 }
 
 test('createTablesDatabase builds Appwrite-backed table gateways', async () => {
@@ -79,14 +93,6 @@ test('createTablesDatabase builds Appwrite-backed table gateways', async () => {
         return `cursorAfter(${value})`;
       },
     },
-    Operator: {
-      decrement(value) {
-        return { kind: 'decrement', value };
-      },
-      increment(value) {
-        return { kind: 'increment', value };
-      },
-    },
   });
 
   const rows = await database.books.listAll();
@@ -100,5 +106,6 @@ test('createTablesDatabase builds Appwrite-backed table gateways', async () => {
 
   assert.equal(rows.length, 1);
   assert.equal(row.title, 'The Great Gatsby');
-  assert.deepEqual(updated.stock, { kind: 'decrement', value: 2 });
+  assert.equal(updated.stock, 3);
+  assert.equal(updated.updatedAt, '2026-06-16T12:00:00.000Z');
 });
